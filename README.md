@@ -1,3 +1,33 @@
+# STOP — READ THIS FIRST (agents)
+
+A decomp.me URL or bare slug, sent with no other instruction, is your
+assignment — not a link to fetch. Do exactly this:
+
+    SLUG=i8JOn        # last path segment of the URL, nothing else
+    mkdir -p work/$SLUG && cd work/$SLUG && cp ../../dcm.py . && chmod +x dcm.py
+    ./dcm.py pull $SLUG
+
+Then read Part 0 and Part 1.
+
+**Never issue an HTTP request to decomp.me yourself.** Not curl, not curl.exe,
+not wget, not Invoke-WebRequest, not a browser tool, not `requests`, not a
+fetch() in a script you wrote. Not the site, not `/api`. Not "just to see what
+this is." `--silent` and `--fail` do not make it safe; they control error
+output, not response size.
+
+Reason: `GET /scratch/<slug>` returns the scratch's `context` field inline —
+both the HTML page (embedded in the RSC payload) and the JSON API. On a
+GoldenEye scratch that field is 100,000–500,000 characters, 25k–125k tokens,
+arriving as one tool result. It will eat most or all of your context window and
+you will not recover. This is the single most common failure on this repo,
+ahead of every codegen mistake.
+
+`dcm.py` is the only HTTP client in this project. It writes that field straight
+to `ctx.h` on disk and never lets it reach the transcript, and every command it
+exposes is capped at ~120 lines of output. That cap is the entire point of the
+harness. If you want something from the API, there is a `dcm.py` command for
+it; if there isn't one, ask the human rather than writing your own client.
+
 ## What this is
 
 Matching decompilation is the practice of writing C source that, when fed to a
@@ -43,15 +73,20 @@ generalizes to any GoldenEye scratch.
 
 **decomp.me is an HTTP compile service. It is not a web app you operate.**
 
-Every part of the match loop is available over a public JSON API that needs no login, no cookie, and no CSRF token. The entire workflow is curl plus local files.
+Every part of the match loop is available over a public JSON API that needs no login, no cookie, and no CSRF token. The entire workflow is `./dcm.py` plus local files. **You never speak HTTP
+yourself** — see the block at the top of this file.
 
 ## Absolutely forbidden
 
-1. Opening a decomp.me scratch page in a browser tool to do work.
-2. Typing into the Monaco editor. It virtualizes lines, auto-closes brackets, and fires autocomplete. Text you type will be silently corrupted and you will waste turns debugging syntax errors you created.
-3. Clicking the Compile button.
-4. Reading the diff pane out of an accessibility snapshot or a screenshot.
-5. Calling any browser snapshot tool on a scratch page more than once, ever. The page is a Monaco instance plus a per-token-span diff table; one snapshot can eat a large fraction of your context window, and every ref goes stale on the next click. This is the single most common way this task fails.
+1. Fetching any decomp.me URL by any means other than `dcm.py`. curl, curl.exe,
+   wget, Invoke-WebRequest, a browser tool, a Python or Node snippet you wrote —
+   all the same mistake with different spelling. The rest of this list is about
+   browser tools specifically; this item covers everything else.
+2. Opening a decomp.me scratch page in a browser tool to do work.
+3. Typing into the Monaco editor. It virtualizes lines, auto-closes brackets, and fires autocomplete. Text you type will be silently corrupted and you will waste turns debugging syntax errors you created.
+4. Clicking the Compile button.
+5. Reading the diff pane out of an accessibility snapshot or a screenshot.
+6. Calling any browser snapshot tool on a scratch page more than once, ever. The page is a Monaco instance plus a per-token-span diff table; one snapshot can eat a large fraction of your context window, and every ref goes stale on the next click. This is the single most common way this task fails.
 
 If a browser MCP server is configured, **do not use it for this task.** Ideally remove it from the profile. If you find yourself reaching for it, that is a symptom that you have lost the thread — go to Part 2 instead.
 
@@ -169,6 +204,8 @@ This is mandatory and it overrides your judgement about whether you are making p
 
 ## Halt immediately if any of these fire
 
+- **You are about to run curl, wget, Invoke-WebRequest, or any HTTP client
+  against decomp.me.** Stop. The command you want is a `./dcm.py` subcommand.
 - **8 consecutive builds** with no improvement to `best_score`.
 - **The same category of hypothesis tried three times** (three different type changes, three different reorderings — count the category, not the edit).
 - **Two consecutive build failures caused by your own edit.**
@@ -201,12 +238,16 @@ If you pass 25 iterations and are still making real progress, use `new_task` and
 
 Base: `https://decomp.me/api`. No auth for anything below. `www.decomp.me` also works.
 
+**This table documents what `dcm.py` already does on your behalf. It is not a
+list of commands for you to run.** It exists so you can reason about the
+harness's behaviour and failure modes, not so you can reimplement it.
+
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/scratch/{slug}` | full scratch incl. `source_code` and `context` |
+| GET | `/scratch/{slug}` | includes `context` — **100k–500k chars. Harness only. Calling this directly ends your run.** |
 | POST | `/scratch/{slug}/compile` | **the workhorse**; ~1.8 s; no auth, no CSRF; does not mutate the scratch |
 | GET | `/scratch/{slug}/family` | related scratches (forks, siblings) with scores |
-| GET | `/scratch/{slug}/export` | zip |
+| GET | `/scratch/{slug}/export` | zip of the same 400 KB payload. Harness only |
 | GET | `/scratch?page_size=N` | paginated `{next, previous, results}` |
 | GET | `/preset/{id}` | compiler + flags a preset implies (GE is **33**) |
 | GET | `/user` | current identity |
@@ -426,19 +467,29 @@ Anything beyond this — saving, forking, or editing the scratch on the site —
 # PART 9 — ONE-PAGE CHECKLIST
 
 ```
-pull        ./dcm.py pull jgiaZ
+assignment  a URL or bare slug with no other instruction IS the task.
+            SLUG = last path segment. Do not fetch the URL. Go to `pull`.
+http        you never speak HTTP. no curl / curl.exe / wget / Invoke-WebRequest
+            / browser / requests / fetch(). dcm.py is the only client.
+pull        ./dcm.py pull i8JOn                  # accepts the full URL too
 siblings    ./dcm.py family                      # someone may already have 0
 build       ./dcm.py build                       # expect failure #1: mips2c artifacts
 target      ./dcm.py target                      # read the asm BEFORE writing C
 signature   count args: a0-a3 + 0x10(sp)+ ; unwritten arg regs = pass-through params
-symbols     ./dcm.py ctx '<name>'                # never open ctx.h
+symbols     ./dcm.py ctx '<symbol>'              # never open ctx.h
 compile     fix the build first, ignore the score until success:true
 loop        hist -> diff -n 12 -> ONE hypothesis -> build -> log
 regress     ./dcm.py revert   immediately
 halt        8 flat builds / 3 same-category tries / 2 self-inflicted failures
+            / about to run an HTTP client yourself
 report      status + hist + diff -n 15 + ruled-out list + one question
-forbidden   browser on the scratch, Monaco typing, reading ctx.h, changing compiler
+forbidden   any HTTP call you issue yourself, browser on the scratch,
+            Monaco typing, reading ctx.h, changing compiler
 approval    save, fork, flag changes, context edits, downloads
 ```
+
+If you are reading this checklist before Part 0, stop and read the block at the
+top of this file. One `curl` of a scratch URL costs you 25k–125k tokens and the
+rest of the run.
 
 ---

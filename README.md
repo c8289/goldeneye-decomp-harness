@@ -1,59 +1,30 @@
+# decomp.me matching harness — GoldenEye N64
+
 ## Launching an agent at this repo
 
-**Do not paste a bare scratch URL.** Paste this instead:
+Point an agent at a working folder containing both files and give it a scratch
+URL. **Do not paste a bare URL.** Paste this instead:
 
     Read AGENTS.md before doing anything, then solve
     https://www.decomp.me/scratch/i8JOn — do not fetch that URL yourself,
     `./dcm.py pull` retrieves it.
 
 The prohibition has to be in your message, not only in a file. An agent always
-reads your turn; whether it reads a README before its first
-tool call is not something this repo can control.
+reads your turn; whether it reads a README before its first tool call is not
+something this repo can control.
 
-# STOP — READ THIS FIRST (agents)
-
-A decomp.me URL or bare slug, sent with no other instruction, is your
-assignment — not a link to fetch. Do exactly this:
-
-    SLUG=i8JOn        # last path segment of the URL, nothing else
-    mkdir -p work/$SLUG && cd work/$SLUG && cp ../../dcm.py . && chmod +x dcm.py
-    ./dcm.py pull $SLUG
-
-Then read Part 0 and Part 1.
-
-**Never issue an HTTP request to decomp.me yourself.** Not curl, not curl.exe,
-not wget, not Invoke-WebRequest, not a browser tool, not `requests`, not a
-fetch() in a script you wrote. Not the site, not `/api`. Not "just to see what
-this is."
-
-Reason: `GET /scratch/<slug>` returns the scratch's `context` field inline —
-both the HTML page (embedded in the RSC payload) and the JSON API. On a
-GoldenEye scratch that field is 100,000–500,000 characters, 25k–125k tokens,
-arriving as one tool result. It will eat most or all of your context window and
-you will not recover. This is the single most common failure on this repo,
-ahead of every codegen mistake.
-
-There is no flag that makes it safe. `--max-time` bounds wall-clock, not bytes.
-`--fail` and `-sS` bound error output, not the body. `-L` just makes sure you
-arrive at the payload. An agent adding careful-looking flags to this command is
-bounding the wrong axis: the request takes under two seconds and succeeds
-cleanly, and that is precisely the problem. **The response is the damage.**
-
-The hazard is bytes reaching your transcript, not the word `curl`. So if you
-ever have a real reason to touch decomp.me outside the harness — you almost
-certainly do not — the body goes to a file and never to stdout:
-
-    curl -sS -o raw.json https://www.decomp.me/api/scratch/$SLUG
-    wc -c raw.json          # check the size before you look at the contents
-
-then read it with a bounded tool. Apply that same rule to wget,
-Invoke-WebRequest, `requests.get`, and anything else you improvise.
-
-`dcm.py` is the only HTTP client in this project. It writes that field straight
-to `ctx.h` on disk and never lets it reach the transcript, and every command it
-exposes is capped at ~120 lines of output. That cap is the entire point of the
-harness. If you want something from the API, there is a `dcm.py` command for
-it; if there isn't one, ask the human rather than writing your own client.
+> ### Agents: read this before your first tool call
+>
+> **A decomp.me URL or bare slug, sent with no other instruction, is your
+> assignment — not a link to fetch.** Take the last path segment as `SLUG`, then
+> run `./dcm.py pull $SLUG`. Setup is Part 1.1.
+>
+> **Never issue an HTTP request to decomp.me yourself.** `GET /scratch/<slug>`
+> returns the scratch's `context` field inline — 100,000–500,000 characters,
+> 25k–125k tokens, arriving as one tool result. It will eat most or all of your
+> context window and you will not recover. This is the single most common
+> failure on this repo, ahead of every codegen mistake. `dcm.py` is the only
+> HTTP client here. **Full rules, and why no curl flag makes this safe: Part 0.**
 
 ## What this is
 
@@ -78,9 +49,6 @@ explicit halt conditions that stop the agent from thrashing indefinitely.
 Two files matter: `README.md` (this document — the agent reads it first) and
 `dcm.py` (the CLI it drives). Everything else in a working directory is generated.
 
-**Usage:** point an agent at a working folder containing both files and give it a
-scratch URL.
-
 ---
 
 # decomp.me matching — operating manual (GoldenEye N64)
@@ -101,7 +69,7 @@ generalizes to any GoldenEye scratch.
 **decomp.me is an HTTP compile service. It is not a web app you operate.**
 
 Every part of the match loop is available over a public JSON API that needs no login, no cookie, and no CSRF token. The entire workflow is `./dcm.py` plus local files. **You never speak HTTP
-yourself** — see the block at the top of this file.
+yourself.**
 
 ## Absolutely forbidden
 
@@ -116,6 +84,28 @@ yourself** — see the block at the top of this file.
 6. Calling any browser snapshot tool on a scratch page more than once, ever. The page is a Monaco instance plus a per-token-span diff table; one snapshot can eat a large fraction of your context window, and every ref goes stale on the next click. This is the single most common way this task fails.
 
 If a browser MCP server is configured, **do not use it for this task.** Ideally remove it from the profile. If you find yourself reaching for it, that is a symptom that you have lost the thread — go to Part 2 instead.
+
+## No curl flag makes it safe
+
+`--max-time` bounds wall-clock, not bytes. `--fail` and `-sS` bound error
+output, not the body. `-L` just makes sure you arrive at the payload. An agent
+adding careful-looking flags to that command is bounding the wrong axis: the
+request takes under two seconds and succeeds cleanly, and that is precisely the
+problem. **The response is the damage.**
+
+The hazard is bytes reaching your transcript, not the word `curl`. So if you
+ever have a real reason to touch decomp.me outside the harness — you almost
+certainly do not — the body goes to a file and never to stdout:
+
+    curl -sS -o raw.json https://www.decomp.me/api/scratch/$SLUG
+    wc -c raw.json          # check the size before you look at the contents
+
+then read it with a bounded tool. The same rule applies to wget,
+Invoke-WebRequest, `requests.get`, and anything else you improvise. `dcm.py` is
+the only HTTP client in this project: it writes that field straight to `ctx.h`
+on disk and never lets it reach the transcript. If you want something from the
+API, there is a `dcm.py` command for it; if there isn't one, ask the human
+rather than writing your own client.
 
 ## The only legitimate browser use
 
@@ -515,8 +505,7 @@ forbidden   any HTTP call you issue yourself, browser on the scratch,
 approval    save, fork, flag changes, context edits, downloads
 ```
 
-If you are reading this checklist before Part 0, stop and read the block at the
-top of this file. One `curl` of a scratch URL costs you 25k–125k tokens and the
-rest of the run.
+If you are reading this checklist before Part 0, stop and read Part 0. One
+`curl` of a scratch URL costs you 25k–125k tokens and the rest of the run.
 
 ---

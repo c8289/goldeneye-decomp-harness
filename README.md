@@ -1,11 +1,5 @@
 # decomp.me match harness — GoldenEye N64
 
-**Note about the language.** This document uses ASD-STE100 Simplified Technical
-English. Some words stay unchanged because they are Technical Names, for example
-`decomp.me`, *scratch*, *slug*, *context*, *token*, *diff*, *histogram*, `mips2c`
-and `IDO`. Some verbs are Technical Verbs for software work, for example
-*compile*, *build*, *fetch*, *grep*, *revert* and *log*.
-
 ## How to start an agent on this repository
 
 Give an agent this repository and a scratch URL. Do not send only a URL. Send

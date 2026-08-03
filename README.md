@@ -39,8 +39,7 @@ compiles submissions against the target. It exposes a JSON API with no auth.
 
 This repo is an **operating protocol and tool harness that lets an autonomous
 coding agent work on or solve these scratches.** The hard part is not the C. It
-is that the task is long, iterative, and full of ways for an agent to destroy
-itself: a single context file here runs past 400,000 characters, and one careless
+is that the task is long, iterative, and full of ways for an agent to fail: a single context file here runs past 400,000 characters, and one careless
 tool call can consume the entire context window. So the harness hard-bounds every
 output, keeps state on disk rather than in the conversation, checkpoints
 improvements to git, auto-reverts regressions, and the protocol below defines

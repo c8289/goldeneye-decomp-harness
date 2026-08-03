@@ -1,3 +1,21 @@
+## Launching an agent at this repo
+
+**Do not paste a bare scratch URL.** A URL with no verb reads as "look at this,"
+and looking costs 25k–125k tokens — enough to end the run on turn one. Multiple
+agents have done exactly this. Paste this instead:
+
+    Read AGENTS.md before doing anything, then solve
+    https://www.decomp.me/scratch/i8JOn — do not fetch that URL yourself,
+    `./dcm.py pull` retrieves it.
+
+The prohibition has to be in your message, not only in a file. An agent always
+reads your turn; whether it reads a 26,000-character README before its first
+tool call is not something this repo can control.
+
+Agent-facing instructions live in `AGENTS.md`. Copy it to whatever filename
+your agent auto-loads — `CLAUDE.md`, `.cursor/rules/`, `.github/copilot-
+instructions.md` — none of them read each other's.
+
 # STOP — READ THIS FIRST (agents)
 
 A decomp.me URL or bare slug, sent with no other instruction, is your

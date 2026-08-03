@@ -2,7 +2,7 @@
 
 ## Launching an agent at this repo
 
-Point an agent at a working folder containing both files and give it a scratch
+Point an agent at this repo and give it a scratch
 URL. **Do not paste a bare URL.** Paste this instead:
 
     Read AGENTS.md before doing anything, then solve

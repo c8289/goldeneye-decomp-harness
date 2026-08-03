@@ -5,8 +5,8 @@
 Point an agent at this repo and give it a scratch
 URL. **Do not paste a bare URL.** Paste this instead:
 
-    Read AGENTS.md before doing anything, then solve
-    https://www.decomp.me/scratch/i8JOn — do not fetch that URL yourself,
+    Read README.md before doing anything, then solve
+    https://www.decomp.me/scratch/<SLUG> — do not fetch that URL yourself,
     `./dcm.py pull` retrieves it.
 
 The prohibition has to be in your message, not only in a file. An agent always

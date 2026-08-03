@@ -45,8 +45,8 @@ with no login.
 This repository is an operating procedure and a tool harness. Together they let
 an autonomous coding agent solve these scratches. The C code is not the
 difficult part. The task is long and has many cycles, and there are many ways
-for an agent to cause damage. One context file here has more than
-400,000 characters. One careless tool call can fill the full context window.
+for an agent to cause damage. A context file from a scratch can have more than
+400,000 characters. One careless tool call can fill most or all of the context window.
 Thus the harness does these things:
 
 - It limits the output of each command.

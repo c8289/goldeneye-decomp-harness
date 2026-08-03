@@ -1,248 +1,196 @@
-# decomp.me match harness — GoldenEye N64
+# decomp.me matching harness — GoldenEye N64
 
-## How to start an agent on this repository
+## Launching an agent at this repo
 
-Give an agent this repository and a scratch URL. Do not send only a URL. Send
-this text:
+Point an agent at this repo and give it a scratch
+URL. **Do not paste a bare URL.** Paste this instead:
 
-    Read AGENTS.md before you do other work. Then solve
-    https://www.decomp.me/scratch/i8JOn — do not fetch that URL.
-    The command `./dcm.py pull` gets it for you.
+    Read AGENTS.md before doing anything, then solve
+    https://www.decomp.me/scratch/i8JOn — do not fetch that URL yourself,
+    `./dcm.py pull` retrieves it.
 
-Put the prohibition in your message. It is not enough to put it in a file. An
-agent always reads your message. But it can be that the agent does not read a
-README file before its first tool call. This repository cannot control this.
+The prohibition has to be in your message, not only in a file. An agent always
+reads your turn; whether it reads a README before its first tool call is not
+something this repo can control.
 
 > ### Agents: read this before your first tool call
 >
-> **A decomp.me URL, or a slug with no other instruction, is your task. It is
-> not a link to fetch.** Use the last part of the path as `SLUG`. Then do the
-> command `./dcm.py pull $SLUG`. Part 1.1 gives the setup.
+> **A decomp.me URL or bare slug, sent with no other instruction, is your
+> assignment — not a link to fetch.** Take the last path segment as `SLUG`, then
+> run `./dcm.py pull $SLUG`. Setup is Part 1.1.
 >
-> **Do not send an HTTP request to decomp.me.** The request `GET
-> /scratch/<slug>` gives you the `context` field of the scratch in the response.
-> That field has 100,000 to 500,000 characters. This is 25,000 to 125,000 tokens
-> in one tool result. It fills the largest part of your context window, and you
-> cannot recover. This is the most frequent failure on this repository. It is
-> more frequent than each error in the code. `dcm.py` is the only HTTP client
-> here. **Part 0 gives the full rules and tells you why no curl option makes
-> this safe.**
+> **Never issue an HTTP request to decomp.me yourself.** `GET /scratch/<slug>`
+> returns the scratch's `context` field inline — 100,000–500,000 characters,
+> 25k–125k tokens, arriving as one tool result. It will eat most or all of your
+> context window and you will not recover. This is the single most common
+> failure on this repo, ahead of every codegen mistake. `dcm.py` is the only
+> HTTP client here. **Full rules, and why no curl flag makes this safe: Part 0.**
 
-## What this repository is
+## What this is
 
-Matching decompilation is a procedure. You write C source code. A specified old
-compiler compiles that source code. The machine code must be the same as the
-machine code in the released binary, byte for byte. Projects use this procedure
-to make the source code of a game such as GoldenEye 007 again. Success is not
-"the code operates". Success is an exact match at instruction level. A tool
-calculates the score automatically. A low score is better than a high score. A
-score of 0 is a match.
+Matching decompilation is the practice of writing C source that, when fed to a
+specific period compiler, produces *byte-identical* machine code to a shipped
+binary. It is how projects reconstruct the original source of a game like
+GoldenEye 007. Success is not "the code works" — it is an exact
+instruction-level match, scored automatically. Lower is better; 0 is a match.
 
-decomp.me is a public web service. It keeps these problems, which are called
-*scratches*. It compiles your source code against the target. It has a JSON API
-with no login.
+decomp.me is a public web service that hosts these problems ("scratches") and
+compiles submissions against the target. It exposes a JSON API with no auth.
 
-This repository is an operating procedure and a tool harness. Together they let
-an autonomous coding agent solve these scratches. The C code is not the
-difficult part. The task is long and has many cycles, and there are many ways
-for an agent to cause damage. A context file from a scratch can have more than
-400,000 characters. One careless tool call can fill most or all of the context window.
-Thus the harness does these things:
+This repo is an **operating protocol and tool harness that lets an autonomous
+coding agent solve these scratches.** The hard part is not the C. It
+is that the task is long, iterative, and full of ways for an agent to destroy
+itself: a single context file here runs past 400,000 characters, and one careless
+tool call can consume the entire context window. So the harness hard-bounds every
+output, keeps state on disk rather than in the conversation, checkpoints
+improvements to git, auto-reverts regressions, and the protocol below defines
+explicit halt conditions that stop the agent from thrashing indefinitely.
 
-- It limits the output of each command.
-- It keeps the data on the disk and not in the conversation.
-- It writes each improvement to git.
-- It goes back automatically when the score becomes worse.
-
-Also, the procedure that follows gives the conditions when you must stop. These
-conditions prevent an unlimited number of unsuccessful tries.
-
-Two files are important:
-
-- `README.md` — this document. The agent reads it first.
-- `dcm.py` — the command-line tool that the agent uses.
-
-A tool makes all the other files in a work directory.
+Two files matter: `README.md` (this document — the agent reads it first) and
+`dcm.py` (the CLI it drives). Everything else in a working directory is generated.
 
 ---
 
-# decomp.me match procedure — operating manual (GoldenEye N64)
+# decomp.me matching — operating manual (GoldenEye N64)
 
-**Readers: an autonomous coding agent with access to a shell. Read Part 0 and
-Part 1 before you do other work.**
+**Audience: an autonomous coding agent with shell access. Read Part 0 and Part 1 before doing anything else.**
 
-Task: `SLUG=<slug>`, from `https://decomp.me/scratch/<slug>`.
+Assignment: `SLUG=<slug>`, from `https://decomp.me/scratch/<slug>`.
 
-This document uses `jgiaZ` as an example, and Part 7 gives a full solution for
-it. **Use the slug that the human gave to you.** Only the example in Part 7 is
-specific to `jgiaZ`. The procedure is applicable to all GoldenEye scratches.
+This document uses `jgiaZ` throughout as a running example, including the fully
+worked solve in Part 7. **Substitute the slug you were actually given.** Nothing
+here is specific to `jgiaZ` except the worked example itself; the protocol
+generalizes to any GoldenEye scratch.
 
 ---
 
-# PART 0 — PRIMARY RULES
+# PART 0 — PRIME DIRECTIVE
 
-**decomp.me is an HTTP service that compiles code. It is not a web application
-that you operate.**
+**decomp.me is an HTTP compile service. It is not a web app you operate.**
 
-A public JSON API gives you each step of the match loop. The API needs no login,
-no cookie and no CSRF token. The full procedure is `./dcm.py` and local files.
-**Do not send HTTP requests.**
+Every part of the match loop is available over a public JSON API that needs no login, no cookie, and no CSRF token. The entire workflow is `./dcm.py` plus local files. **You never speak HTTP
+yourself.**
 
-## Prohibited actions
+## Absolutely forbidden
 
-WARNING: Do not do the actions that follow. They can stop your run.
+1. Fetching any decomp.me URL by any means other than `dcm.py`. curl, curl.exe,
+   wget, Invoke-WebRequest, a browser tool, a Python or Node snippet you wrote —
+   all the same mistake with different spelling. The rest of this list is about
+   browser tools specifically; this item covers everything else.
+2. Opening a decomp.me scratch page in a browser tool to do work.
+3. Typing into the Monaco editor. It virtualizes lines, auto-closes brackets, and fires autocomplete. Text you type will be silently corrupted and you will waste turns debugging syntax errors you created.
+4. Clicking the Compile button.
+5. Reading the diff pane out of an accessibility snapshot or a screenshot.
+6. Calling any browser snapshot tool on a scratch page more than once, ever. The page is a Monaco instance plus a per-token-span diff table; one snapshot can eat a large fraction of your context window, and every ref goes stale on the next click. This is the single most common way this task fails.
 
-1. Do not fetch a decomp.me URL with a tool that is not `dcm.py`. curl,
-   curl.exe, wget, Invoke-WebRequest, a browser tool, and Python or Node code
-   that you write are the same error with different names. Items 2 to 6 are
-   about browser tools. Item 1 is about all the other tools.
-2. Do not open a decomp.me scratch page in a browser tool to do work.
-3. Do not type in the Monaco editor. The editor keeps only some lines in memory,
-   it closes brackets automatically, and it shows completion menus. The editor
-   can change your text with no message. Then you must correct syntax errors
-   that you did not intend to make.
-4. Do not click the Compile button.
-5. Do not read the diff panel from an accessibility snapshot or from a
-   screenshot.
-6. Do not use a browser snapshot tool on a scratch page. Do not use it one time.
-   The page has a Monaco editor and a diff table with one entry for each token.
-   One snapshot can fill a large part of your context window. Also, each
-   reference becomes obsolete after the next click. This is the most frequent
-   cause of failure for this task.
+If a browser MCP server is configured, **do not use it for this task.** Ideally remove it from the profile. If you find yourself reaching for it, that is a symptom that you have lost the thread — go to Part 2 instead.
 
-If a browser MCP server is available, **do not use it for this task.** It is
-better to remove it from the profile. If you want to use it, this shows that you
-have a problem with the procedure. Go to Part 2.
+## No curl flag makes it safe
 
-## No curl option is safe
+`--max-time` bounds wall-clock, not bytes. `--fail` and `-sS` bound error
+output, not the body. `-L` just makes sure you arrive at the payload. An agent
+adding careful-looking flags to that command is bounding the wrong axis: the
+request takes under two seconds and succeeds cleanly, and that is precisely the
+problem. **The response is the damage.**
 
-The option `--max-time` limits the time. It does not limit the number of bytes.
-The options `--fail` and `-sS` limit the error output. They do not limit the
-body. The option `-L` only makes sure that you get to the data. If you add
-options that look careful, you limit the incorrect quantity. The request needs
-less than two seconds and it is fully successful. This is the problem. **The
-response is the damage.**
-
-The hazard is the bytes that go into your transcript. The hazard is not the word
-`curl`. Almost always, you do not have a correct reason to use decomp.me without
-the harness. If you have such a reason, write the body to a file. Do not write
-the body to stdout:
+The hazard is bytes reaching your transcript, not the word `curl`. So if you
+ever have a real reason to touch decomp.me outside the harness — you almost
+certainly do not — the body goes to a file and never to stdout:
 
     curl -sS -o raw.json https://www.decomp.me/api/scratch/$SLUG
-    wc -c raw.json          # look at the size before you read the contents
+    wc -c raw.json          # check the size before you look at the contents
 
-Then read the file with a tool that limits its output. The same rule is
-applicable to wget, Invoke-WebRequest, `requests.get`, and each other client
-that you write. `dcm.py` is the only HTTP client in this project. It writes the
-`context` field directly to the file `ctx.h` on the disk. It does not let the
-field go into the transcript. If you need data from the API, use a `dcm.py`
-command. If there is no applicable command, ask the human. Do not write your own
-client.
+then read it with a bounded tool. The same rule applies to wget,
+Invoke-WebRequest, `requests.get`, and anything else you improvise. `dcm.py` is
+the only HTTP client in this project: it writes that field straight to `ctx.h`
+on disk and never lets it reach the transcript. If you want something from the
+API, there is a `dcm.py` command for it; if there isn't one, ask the human
+rather than writing your own client.
 
-## The one permitted use of a browser
+## The only legitimate browser use
 
-You can read a related issue, a decomp wiki page, or the documents of a project.
-Do not read the scratch.
+Reading a linked issue, a decomp wiki page, or a project's docs. Never the scratch itself.
 
-## Actions that need the approval of the human
+## Actions that require the human's explicit approval
 
-A compile does not change stored data and has no cost. It does not change the
-scratch. Thus you do not need approval, and you can compile as frequently as
-your discipline permits. The actions that follow make or change content. The
-human must agree in the chat before you do them:
+Compiling is stateless and free — it never modifies the scratch, so no approval is needed and you may do it as often as your discipline allows. These, by contrast, create or mutate content and require the human to say yes in chat first:
 
-- `PUT /scratch/{slug}` (save)
-- `POST /scratch/{slug}/fork`
-- a change to `compiler`, `compiler_flags` or `diff_label` in `meta.json`
-- a download of a file that the harness does not write
+`PUT /scratch/{slug}` (save), `POST /scratch/{slug}/fork`, any change to `compiler`, `compiler_flags`, or `diff_label` in `meta.json`, and any file download beyond what the harness writes.
 
-## Rules that you cannot change
+## Non-negotiables
 
-- Make only one hypothesis for each compile.
-- Do not make a change on top of a change that you did not check.
-- A low score is better. A score of 0 is a match. `max_score` is not a maximum
-  for the score.
-- Usually, `current_score == max_score` shows that your code did not compile. It
-  does not show that your code compiled badly.
-- The compiler is `ido5.3`. **Do not change it.** The flags are `-Olimit 2000
-  -mips2 -O2`. Read Part 8 before you change them.
+- The context field on a GE scratch is 100k–500k characters. On `jgiaZ` it is **417,462 characters / 15,421 lines, roughly 105k tokens.** The harness writes it to `ctx.h`. **Never read it, never `cat` it, never let it into a tool result.** Use `./dcm.py ctx <regex>` — that is what it is for.
+- One hypothesis per compile.
+- Never build a change on top of an unvalidated change.
+- Score: **lower is better, 0 is a match.** It is not capped by `max_score`.
+- `current_score == max_score` almost always means **your code did not compile**, not that it compiled badly.
+- The compiler is `ido5.3`. **You may never change it.** Flags are `-Olimit 2000 -mips2 -O2`; see Part 8 before touching them.
 
 ---
 
-# PART 1 — SETUP (do this first, each time)
+# PART 1 — SETUP (do this first, every time)
 
-## 1.1 First commands
+## 1.1 Bootstrap
 
 ```bash
 SLUG=<slug>                       # from https://decomp.me/scratch/<SLUG>
 mkdir -p work/$SLUG && cd work/$SLUG
-# put dcm.py in this directory (Part 1.2)
+# save dcm.py here (Part 1.2)
 chmod +x dcm.py
 ./dcm.py pull $SLUG
-./dcm.py family              # does a related scratch have a match?
-./dcm.py build               # first build. Usually it fails. This is correct.
-./dcm.py target              # READ THE TARGET before you write C code
+./dcm.py family              # is a sibling already matched?
+./dcm.py build               # first build; usually fails, that is expected
+./dcm.py target              # READ THE TARGET before writing any C
 ```
 
-The command `pull` writes `meta.json`, `src.c`, `ctx.h`, `best.c` and `LOG.md`.
-It also makes a git baseline. The command `build` compiles the code on the
-server and prints a limited report. No command prints more than approximately 40
-lines.
+`pull` writes `meta.json`, `src.c`, `ctx.h`, `best.c`, `LOG.md` and makes a git baseline. `build` compiles remotely and prints a bounded report. Nothing prints more than ~40 lines.
 
 ## 1.2 The harness
 
-The file `dcm.py` is in the root directory of the repository. Copy it into your
-work directory. Then make it executable:
+`dcm.py` lives in the repo root. Copy it into your working directory and make it executable:
 
 ```bash
 chmod +x dcm.py
 ```
 
-Do not change `dcm.py`. Do not copy its text into a different file. There is one
-copy, and this is it.
+Do not modify it. Do not paste it into another file. There is one copy and this is it.
 
 ```
-./dcm.py pull <slug> [--force]  fetch the scratch -> meta.json, src.c, ctx.h, best.c
-./dcm.py build [-n N] [--src]   compile src.c on the server, print score + differences
-./dcm.py diff  [-n N]           show the last result again, offline (no cost, no network)
-./dcm.py diff --at ADDR         show the diff near one target address
-./dcm.py diff --src             show the source lines of the target for the differences
-./dcm.py hist                   print only the histogram of the difference categories
-./dcm.py target [-n N]          print only the disassembly column of the TARGET
-./dcm.py ctx <regex> [-n N]     grep ctx.h  (do NOT open ctx.h in a different way)
-./dcm.py ctx <regex> --block 40 print 40 lines from the first result (struct definitions)
-./dcm.py family [--get SLUG]    list related scratches / fetch the source of one of them
-./dcm.py revert                 write best.c over src.c
-./dcm.py log "text"             add one line to LOG.md
-./dcm.py status                 score, best score, iteration, score history, recent log
+./dcm.py pull <slug> [--force]  fetch scratch -> meta.json, src.c, ctx.h, best.c
+./dcm.py build [-n N] [--src]   compile src.c remotely, report score + divergences
+./dcm.py diff  [-n N]           re-render last result offline (free, no network)
+./dcm.py diff --at ADDR         window the diff around a target address
+./dcm.py diff --src             show target source-line annotations for divergences
+./dcm.py hist                   difference-category histogram only
+./dcm.py target [-n N]          print the TARGET disassembly column only
+./dcm.py ctx <regex> [-n N]     grep ctx.h  (NEVER open ctx.h any other way)
+./dcm.py ctx <regex> --block 40 print 40 lines from the first hit (struct defs)
+./dcm.py family [--get SLUG]    list related scratches / fetch a sibling's source
+./dcm.py revert                 restore best.c over src.c
+./dcm.py log "text"             append a line to LOG.md
+./dcm.py status                 score, best, iteration, score history, recent log
 ```
 
-The harness uses the public JSON API of decomp.me. Thus the agent does not use a
-browser.
+Talks to the public decomp.me JSON API so the agent never touches a browser.
 
-**Each command has a limit.** One command prints a maximum of approximately 120
-rows. The quantity of the data does not change this limit. This limit is the
-primary protection for your context window during a long task. This is why you
-use these commands and not `cat`, `grep` or a browser tool.
+**Every command is hard-bounded.** No single invocation prints more than ~120 rows, regardless of how large the underlying data is. That ceiling is the main thing keeping the context window survivable across a long solve, and it is why you use these commands instead of `cat`, `grep`, or a browser tool.
 
-The harness writes these files into the work directory. A tool makes all of
-them. None of them is source code that you write:
+Files the harness writes into the working directory — all generated, none of them source:
 
 | file | what it is |
 |---|---|
-| `meta.json` | the settings of the scratch, the best score, the number of iterations, the score history |
-| `src.c` | your current attempt. This is the only file that you edit |
-| `best.c` | an automatic copy of the attempt with the best score |
-| `ctx.h` | the context of the scratch. It is very large. Do not open it directly |
-| `target.txt` | the disassembly column of the target. The harness writes it at each build |
-| `last.json` | the last successful compile response. `diff` and `hist` use it offline |
-| `lastfail.json` | the last compile response that failed |
-| `LOG.md` | your record of the hypotheses that you tried and removed |
+| `meta.json` | scratch settings, best score, iteration count, score history |
+| `src.c` | your current attempt — the only file you edit |
+| `best.c` | automatic snapshot of the best-scoring attempt so far |
+| `ctx.h` | the scratch context. Enormous. Never open it directly |
+| `target.txt` | the target disassembly column, written on each build |
+| `last.json` | last successful compile response, used by `diff` and `hist` offline |
+| `lastfail.json` | last failed compile response |
+| `LOG.md` | your written record of hypotheses tried and ruled out |
 
-`best.c` and `LOG.md` are your memory. They stay after a reset of the context.
-The conversation does not stay.
+`best.c` and `LOG.md` are your memory. They survive a context reset; the conversation does not.
 
-## 1.3 An example of a build
+## 1.3 What a build looks like
 
 ```
 SCORE 846 / max 1300   best 846   [IMPROVED]  iter 3  1.8s
@@ -263,39 +211,28 @@ first 11 of 11 divergences (target | ours):
    ...
 ```
 
-One iteration gives approximately 25 lines. This is all the data that you get.
-Do not ask for more data, if one specific hypothesis does not need it. Use
-`./dcm.py diff --at 1c`, which is offline and has no cost. Do not compile again
-for this.
+Roughly 25 lines per iteration. That is your entire feedback channel. Do not ask for more unless a specific hypothesis needs it, and prefer `./dcm.py diff --at 1c` (offline, free) over recompiling.
 
 ---
 
-# PART 2 — THE STOP CONDITIONS
+# PART 2 — THE STUCK TRIPWIRE
 
-You must obey these conditions. They have more importance than your opinion
-about your progress. Agents that fail this task do not fail because they have
-too few ideas. They fail because they make new ideas continuously and do not see
-that no idea was successful.
+This is mandatory and it overrides your judgement about whether you are making progress. Agents that fail this task do not fail because they lack ideas; they fail because they generate ideas indefinitely without noticing that none of them worked.
 
-## Stop immediately if one of these conditions occurs
+## Halt immediately if any of these fire
 
-- **You will run curl, wget, Invoke-WebRequest, or a different HTTP client on
-  decomp.me.** Stop. Use the applicable `./dcm.py` command.
-- **8 builds in sequence** did not improve `best_score`.
-- **You tried the same category of hypothesis three times** (three different
-  changes of a type, three different changes of a sequence). Count the category,
-  not the edit.
-- **Two builds in sequence failed** because of your own edit.
-- **One tool result has more than approximately 2000 lines.** Or you cannot
-  write a summary of each of two tool results in one sentence.
-- **The score is equal to or more than `max_score`**, and you did not examine
-  `diff_label`.
-- **You will open a browser tool.**
-- **You will read `ctx.h`, or print all of `src.c`,** to get general knowledge of
-  the code.
-- **You cannot say in one sentence what your last edit tested.**
+- **You are about to run curl, wget, Invoke-WebRequest, or any HTTP client
+  against decomp.me.** Stop. The command you want is a `./dcm.py` subcommand.
+- **8 consecutive builds** with no improvement to `best_score`.
+- **The same category of hypothesis tried three times** (three different type changes, three different reorderings — count the category, not the edit).
+- **Two consecutive build failures caused by your own edit.**
+- **Any single tool result over ~2000 lines**, or any two consecutive tool results you cannot summarize in one sentence each.
+- **Score ≥ max_score** and you have not checked `diff_label`.
+- **You are about to open a browser tool.**
+- **You are about to read `ctx.h` or dump `src.c` in full "just to get oriented."**
+- **You cannot state, in one sentence, what your last edit was testing.**
 
-## Stop procedure
+## Halt procedure
 
 ```bash
 ./dcm.py revert
@@ -304,47 +241,38 @@ that no idea was successful.
 ./dcm.py diff -n 15
 ```
 
-Then give this report: the best score, the histogram of the categories, the
-first differences, the hypotheses that you removed, and one specific question.
-Use `ask_followup_question`. **Do not continue.**
+Then report: best score, the category histogram, the first divergences, the hypotheses already ruled out, and one specific question. Use `ask_followup_question`. **Do not continue.**
 
-A correct score of 846/1300, with a clear diff and a list of the hypotheses that
-you removed, has much more value than forty turns with no result. Such turns
-usually stop at 846 also, and they fill your context.
+An honest 846/1300 with a clean diff and a ruled-out list is worth far more than forty turns of thrashing that ends at 846 anyway with a poisoned context.
 
-## Checkpoints
+## Checkpointing
 
-If you do more than 25 iterations and you continue to make real progress, use
-`new_task`. Move only these items: the slug, the best score, the histogram, the
-three most important differences, and `LOG.md`. Do not move source code, context
-or old diffs. `best.c` and `LOG.md` are on the disk. They are your memory. The
-conversation is not your memory.
+If you pass 25 iterations and are still making real progress, use `new_task` and carry over only: slug, best score, the histogram, the top three divergences, and `LOG.md`. Do not carry over source, context, or old diffs. `best.c` and `LOG.md` are on disk; that is your memory, not the conversation.
 
 ---
 
-# PART 3 — THE API, AS CHECKED
+# PART 3 — THE API, VERIFIED
 
-Base URL: `https://decomp.me/api`. The items that follow need no login. The
-address `www.decomp.me` also operates.
+Base: `https://decomp.me/api`. No auth for anything below. `www.decomp.me` also works.
 
-**This table shows what `dcm.py` does for you. It is not a list of commands for
-you to run.** It helps you to understand the behavior of the harness and its
-failure modes. Do not write the same operations again.
+**This table documents what `dcm.py` already does on your behalf. It is not a
+list of commands for you to run.** It exists so you can reason about the
+harness's behaviour and failure modes, not so you can reimplement it.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/scratch/{slug}` | contains `context` — **100,000 to 500,000 characters. For the harness only. If you call this directly, your run stops.** |
-| POST | `/scratch/{slug}/compile` | **the primary operation**. Approximately 1.8 s. No login, no CSRF. It does not change the scratch |
-| GET | `/scratch/{slug}/family` | related scratches (forks and others) with their scores |
-| GET | `/scratch/{slug}/export` | a zip file with the same 400 KB of data. For the harness only |
-| GET | `/scratch?page_size=N` | pages of results: `{next, previous, results}` |
-| GET | `/preset/{id}` | the compiler and the flags of a preset (GoldenEye is **33**) |
-| GET | `/user` | the current identity |
-| OPTIONS | each path | the DRF schema of the fields |
-| PUT | `/scratch/{slug}` | save — **for the owner only. The user must give approval** |
-| POST | `/scratch/{slug}/fork` | fork — **it makes content. The user must give approval** |
+| GET | `/scratch/{slug}` | includes `context` — **100k–500k chars. Harness only. Calling this directly ends your run.** |
+| POST | `/scratch/{slug}/compile` | **the workhorse**; ~1.8 s; no auth, no CSRF; does not mutate the scratch |
+| GET | `/scratch/{slug}/family` | related scratches (forks, siblings) with scores |
+| GET | `/scratch/{slug}/export` | zip of the same 400 KB payload. Harness only |
+| GET | `/scratch?page_size=N` | paginated `{next, previous, results}` |
+| GET | `/preset/{id}` | compiler + flags a preset implies (GE is **33**) |
+| GET | `/user` | current identity |
+| OPTIONS | any | DRF field schema |
+| PUT | `/scratch/{slug}` | save — **owner only, requires explicit user approval** |
+| POST | `/scratch/{slug}/fork` | fork — **creates content, requires explicit user approval** |
 
-## The compile request
+## Compile request
 
 ```json
 {
@@ -358,12 +286,9 @@ failure modes. Do not write the same operations again.
 }
 ```
 
-The fields `compiler` and `source_code` are necessary. The field `preset` is
-optional, and it changes nothing when you give `compiler` and `compiler_flags`.
-Thus the harness does not send it. You can omit `context`, but then the score
-has no value, because each type in the function is not defined.
+`compiler` and `source_code` are required. `preset` is optional and changes nothing when `compiler` and `compiler_flags` are both supplied, so the harness omits it. `context` may be omitted, but then the score is meaningless — every type in the function will be undefined.
 
-## The compile response
+## Compile response
 
 ```json
 {
@@ -379,268 +304,153 @@ has no value, because each type in the function is not defined.
 }
 ```
 
-The field `diff_output` is in the response also when `success` is false. The
-`base` column always contains the full disassembly of the target. Thus the
-harness writes `target.txt` at each build, also when the build fails. Thus you
-can read the target before your first successful compile.
+Note that `diff_output` is present **even when `success` is false** — the `base` column still holds the full target disassembly. That is why the harness writes `target.txt` on every build, failed or not, and why you can read the target before you have ever compiled successfully.
 
 ## Failure modes
 
 | Symptom | Meaning |
 |---|---|
-| HTTP 400, `{"compiler":["Unknown compiler: x"],"kind":"ValidationError"}` | the name of the compiler is incorrect. No compile occurred |
-| `success: false`, `current_score == max_score` | the code did not compile. Read `compiler_output` |
-| `success: true`, score equal to or more than `max_score` | `diff_label` did not find the function. You changed its name |
-| HTTP 429 / 502 / 504 | a temporary condition. The harness waits and tries again |
+| HTTP 400, `{"compiler":["Unknown compiler: x"],"kind":"ValidationError"}` | bad compiler name; no compile ran |
+| `success: false`, `current_score == max_score` | did not compile; read `compiler_output` |
+| `success: true`, score ≥ max_score | `diff_label` did not resolve — you renamed the function |
+| HTTP 429 / 502 / 504 | transient; the harness backs off and retries |
 
-There is no obvious limit on the rate of the compile requests. But do not send
-many requests quickly. One build for each hypothesis is the correct discipline.
+Compile is not obviously rate-limited, but do not hammer it. One build per hypothesis is the discipline anyway.
 
 ---
 
-# PART 4 — HOW TO READ THE DIFF
+# PART 4 — READING THE DIFF
 
-## The structure of a row
+## Row structure
 
-Each row has a `base` part (the target) and a `current` part (your code). Each
-part has this structure: `{text:[{text, format?, group?, key?}], mnemonic, line,
-branch?, src?, src_line?, src_comment?}`. Put the `text` parts together to get
-the line for the display.
+Each row has `base` (target) and `current` (yours), each shaped `{text:[{text, format?, group?, key?}], mnemonic, line, branch?, src?, src_line?, src_comment?}`. Concatenate the `text` chunks to get the display line.
 
-## The markers — the important part
+## Markers — the important part
 
-The `format` values contain `register`, `stack`, `immediate` and `rotation`.
-These values are **categories for the display. They are not flags for a
-difference.** Only `diff_add`, `diff_remove` and `diff_change` are true diff
-formats, and they show less than one third of the real differences. To find a
-difference, read **the first marker character of the `current` column**. This
-behavior is checked. It is not a guess.
+The `format` values include `register`, `stack`, `immediate` and `rotation`, which are **highlighting categories, not difference flags.** Only `diff_add`, `diff_remove` and `diff_change` are true diff formats, and they cover fewer than a third of real differences. Detect divergence from the **leading marker character of the `current` column** — this is verified behaviour, not a guess.
 
-| Marker | Meaning | Usual cause |
+| Marker | Meaning | Usually caused by |
 |---|---|---|
-| `<` | in the target, not in your code | a missing operation, a temporary variable that you removed, a different form of a call |
-| `>` | in your code, not in the target | an extra spill, an extra load, an unnecessary temporary variable, a callee-saved register that you do not need |
-| `\|` | the instruction is different | an incorrect operation: the sign, the width, or the wrong group of opcodes |
-| `r` | only the register is different | the sequence of the allocation, the lifetime of a local variable, the sequence of the declarations |
-| `s` | only the stack offset is different | the layout of the frame: the number, the sequence, the alignment or the padding of the local variables |
-| `i` | the immediate value is different | an incorrect constant, an incorrect struct offset, an incorrect field |
-| (space) | the same | — |
+| `<` | in target, absent from ours | missing operation, dropped temporary, different call form |
+| `>` | in ours, absent from target | extra spill, extra load, unnecessary temporary, a callee-saved register we should not need |
+| `\|` | instruction changed | wrong operation — signedness, width, wrong opcode family |
+| `r` | register mismatch only | allocation order, local lifetime, declaration order |
+| `s` | stack offset mismatch only | frame layout — local count, order, alignment, padding |
+| `i` | immediate mismatch | wrong constant, wrong struct offset, wrong field |
+| (space) | identical | — |
 
-## How to read the histogram
+## Reading the histogram
 
-The histogram shows the class of your problem before you read one instruction.
+The histogram tells you what class of problem you have before you look at a single instruction.
 
-Many `r` markers and almost no other markers show a problem with the allocation
-of the registers. Change the sequence of the declarations, change the lifetimes
-of the local variables, and move the temporary variables. Do not change the
-semantics.
+Dominated by `r` with almost nothing else means register allocation. Reorder declarations, change local lifetimes, hoist or sink temporaries — do not touch semantics.
 
-Many `s` markers show a problem with the layout of the stack frame: an incorrect
-number, size, sequence or alignment of the local variables. Look first at the
-instruction for the frame size, `addiu sp,sp,-N`. If this instruction is
-different, no subsequent instruction is in the correct position, and all the
-other differences are noise.
+Dominated by `s` means stack frame layout: wrong number, size, order or alignment of locals. Look at the frame-size instruction `addiu sp,sp,-N` first. If that differs, nothing downstream lines up and every other divergence is noise.
 
-Many `i` markers show a problem with the constants and the struct offsets.
-Almost always the field or the width of the type is incorrect. Use grep on the
-context to find the struct. Do not guess.
+Dominated by `i` means constants and struct offsets, almost always the wrong field or the wrong type width. Grep the context for the struct instead of guessing.
 
-Many `>` and `<` markers in balanced pairs show a different sequence of the
-instructions, or an operation in a different position. Many `>` markers with
-almost no `<` markers show that your code does unnecessary work: an unnecessary
-load, an unnecessary spill, a common subexpression that the compiler did not
-find, or a local variable that the target does not have.
+Many `>` and `<` in balanced pairs means instruction scheduling or a moved operation. Many `>` alone means you are generating extra work — a redundant load, an unnecessary spill, a missing common subexpression, or a local the target does not have.
 
-A small number of `|` markers near the top, with a clear part after them, shows
-one incorrect operation near the start. Correct that operation. The other
-differences are a result of it.
+A handful of `|` near the top with a clean tail means one wrong operation early. Fix that one; the rest is downstream noise.
 
-## Diagnosis from the first difference
+## Diagnose from the first divergence
 
-Compare these items in this sequence, and stop at the first difference:
+Compare in this order and stop at the first mismatch: frame size (`addiu sp,sp,-N`), then which registers the prologue saves and in what order, then branch structure and count, then call sites and their argument setup, then load/store counts, then constants and offsets, then the return path and epilogue.
 
-1. the frame size (`addiu sp,sp,-N`)
-2. the registers that the prologue saves, and their sequence
-3. the structure and the number of the branches
-4. the calls and the setup of their arguments
-5. the number of the loads and the stores
-6. the constants and the offsets
-7. the return path and the epilogue
-
-Usually, a difference near the end of the function is a result of one cause
-before it. If you correct the last difference first, you can use twenty
-iterations with no result.
+Late-function divergence is usually downstream of a single earlier cause. Chasing the last difference is the classic way to burn twenty iterations.
 
 ---
 
-# PART 5 — DISCIPLINE FOR THE HYPOTHESES
+# PART 5 — HYPOTHESIS DISCIPLINE
 
 ## The loop
 
 ```bash
-./dcm.py hist                 # which class of problem?
-./dcm.py diff -n 12           # the first differences, offline, no cost
-# ---- make exactly ONE hypothesis. Write it in one sentence ----
-# ---- make the smallest possible edit to src.c ----
-./dcm.py build                # approximately 2 s
-./dcm.py log "arg3 changed to s32: 846 -> 501, kept"
-# if the score is worse: ./dcm.py revert immediately, before you think about the next idea
+./dcm.py hist                 # what class of problem?
+./dcm.py diff -n 12           # first divergences, offline, free
+# ---- form exactly ONE hypothesis, state it in one sentence ----
+# ---- edit src.c minimally ----
+./dcm.py build                # ~2s
+./dcm.py log "widened arg3 to s32: 846 -> 501, kept"
+# if REGRESSED: ./dcm.py revert   immediately, before thinking about the next idea
 ```
 
-`best.c` and the git history keep your best result. The harness writes to both of
-them automatically when the score improves. One command gives your best state
-again. Thus you can try large changes — but only one change at a time.
+`best.c` and the git history are your safety net; the harness updates both automatically on improvement. You can always return to your best state with one command, which means you are free to try aggressive ideas — but only one at a time.
 
-## Catalogue of the hypotheses, approximately in the sequence of their value
+## Hypothesis catalogue, roughly in order of yield
 
-**The number of the arguments and the register class of the function that you
-call.** For GoldenEye, examine this first. It gives the best results, because
-mips2c guesses the signatures of the calls and is frequently incorrect. Refer to
-Part 6.
+**Argument count and register class of the callee.** On GE this is the highest-yield check by far, because mips2c guesses call signatures and is frequently wrong. See Part 6.
 
-**Types and signs.** `s32`, `u32`, `s16` and `u8` change the sign extension and
-the zero extension. They can add or remove full instructions. On MIPS, a
-difference between `lb`, `lbu`, `lh` and `lhu` is only an error of type. This
-check has a high value and a low risk.
+**Types and signedness.** `s32` vs `u32` vs `s16` vs `u8` changes sign/zero extension and can add or remove whole instructions. On MIPS, `lb`/`lbu`/`lh`/`lhu` mismatches are pure type errors. High yield, low risk.
 
-**The sequence of the declarations of the local variables.** On IDO, this
-sequence controls the layout of the stack and the allocation of the registers.
-If the histogram has many `s` or `r` markers, change this sequence first.
+**Declaration order of locals.** Directly drives both stack layout and register allocation on IDO. If the histogram is `s`- or `r`-dominated, permute this first.
 
-**The lifetime of a temporary variable.** If you add or remove a local variable,
-the allocation changes. `x = a->b; use(x); use(x);` and `use(a->b); use(a->b);`
-give different machine code.
+**Temporary lifetime.** Introducing or removing an explicit local changes allocation: `x = a->b; use(x); use(x);` and `use(a->b); use(a->b);` produce different code.
 
-**The groups in an expression and the sequence of the operations.** `(a + b) + c`
-or `a + (b + c)`, the sequence of the arguments, and the sequence of the operands
-in a comparison.
+**Expression grouping and evaluation order.** `(a + b) + c` versus `a + (b + c)`, argument evaluation order, operand order in a comparison.
 
-**The form of a condition.** `if (!x)` or `if (x == 0)`, `if (a && b)` or two
-`if` statements in each other, inverted branches, an early return or one return
-at the end.
+**Condition form.** `if (!x)` versus `if (x == 0)`, `if (a && b)` versus nested `if`, inverted branches, early return versus single exit.
 
-**The form of a loop.** `for`, `while` or `do/while`, invariants that you move
-out of the loop, an increment of a pointer or an index.
+**Loop form.** `for` versus `while` versus `do/while`, hand-hoisted loop invariants, pointer increment versus index.
 
-**The form of the access to a struct.** `p->a.b[i]`, or an intermediate pointer
-that you keep in a variable. An incorrect struct definition in the context gives
-`i` differences. Use grep on `ctx.h` to find the struct. Do not guess the offset.
+**Struct access form.** `p->a.b[i]` versus a cached intermediate pointer. Wrong struct definitions in the context produce `i` divergences; grep `ctx.h` for the struct rather than guessing at the offset.
 
-**Casts and pointers to a different type.** The position of the cast changes the
-width of the load. `*(s32 *)((u8 *)p + 0x10)` and `p->field` can be different.
+**Casts and pointer punning.** Where the cast sits changes the load width. `*(s32 *)((u8 *)p + 0x10)` and `p->field` can differ.
 
-**`volatile`.** This keyword causes a spill or prevents a change of the
-sequence. Sometimes it is the only method to get a match. It is permitted, but
-use it as the last method, and write it in the log.
+**`volatile`.** Forces a spill or prevents reordering. Occasionally the only way to match; a legitimate but last-resort tool, and it must be logged as such.
 
-**Inline code and the form of a call.** The compiler can put the body of a
-`static` function directly in the code. Or the compiler must not do this.
-Examine the target: does it have a `jal` instruction or the body of the
-function?
+**Inlining and call form.** A `static` helper that the compiler inlines, or a call the compiler must not inline. Check whether the target has a real `jal` or an inlined body.
 
-**Floats.** `f32` or `f64` for the intermediate values. On IDO, examine also if a
-constant is in the literal pool. Look for pairs of `sdc1` and `ldc1` near `$f20`
-and higher. They show that the target saves the callee-saved FPU registers.
-Thus the target uses doubles and not floats.
+**Float handling.** `f32` versus `f64` intermediates, and on IDO whether a constant lives in the literal pool. Watch for `sdc1`/`ldc1` pairs around `$f20`+ — those indicate the target saves callee-saved FPU registers, which means it really uses doubles, not floats.
 
 ---
 
-# PART 6 — SPECIFIC DATA FOR GOLDENEYE AND PERFECT DARK
+# PART 6 — GOLDENEYE / PERFECT DARK SPECIFICS
 
-These scratches have the same general shape. This knowledge decreases the number
-of the iterations.
+These scratches share a signature shape, and knowing it saves most of the iterations.
 
-## Usually the published source code does not compile
+## The published source usually does not compile
 
-The GoldenEye scratches are the output of mips2c from a bulk import. If the
-published score is equal to `max_score` (on `jgiaZ` it is 1300/1300), the source
-code never compiled. Expect problems such as these: a `?` character in the
-position of a return type, pseudo-local variables with the name `sp`, sequences
-of `temp_t6` variables, and arithmetic on `void *`. Arithmetic on `void *` is a
-GCC extension, and **IDO does not accept it**. Do a cast to `u8 *` before you add
-a byte offset. Your first task is a build with no errors. A good score comes
-after that.
+GE scratches are bulk-imported mips2c output. A published `score == max_score` (as on `jgiaZ`: 1300/1300) means the source has never compiled. Expect artifacts like a bare `?` where a return type belongs, `sp` pseudo-locals, `temp_t6` chains, and arithmetic on `void *` — which is a GCC extension that **IDO rejects**. Cast to `u8 *` before adding a byte offset. Your first job is a clean build, not a good score.
 
-## The context is a header dump of the full game
+## The context is a whole-game header dump
 
-On `jgiaZ` the context has 417,462 characters. Most of it is typedefs, struct
-definitions and prototypes of other functions. All of its content is already
-correct. This has two results: do not write it again without a good reason, and
-always look for a symbol in it before you write your own declaration:
+417,462 characters on `jgiaZ`, mostly typedefs, struct definitions and prototypes for other functions. It is already correct for everything it contains. Two consequences: never rewrite it casually, and always check whether a symbol is in it before declaring your own:
 
 ```bash
 ./dcm.py ctx 'likely_generate_DL_for_image_declaration'
 ./dcm.py ctx 'typedef struct.*ObjHeader' --block 40
 ```
 
-If grep finds nothing, the function that you call is not declared. Then **you
-must add an `extern` prototype at the top of `src.c`**. This is normal and
-correct. It is not a change to the context.
+If the grep comes back empty, the callee is genuinely undeclared and **you must add an `extern` prototype at the top of `src.c`** — that is expected and normal, not a context edit.
 
-## Read the o32 calling convention from the target
+## Read the o32 calling convention off the target
 
-This is the most useful method for GoldenEye and Perfect Dark, because it gives
-you the true signature. Frequently mips2c guesses that signature incorrectly.
+This is the single most useful skill for GE/PD, because it recovers the true signature that mips2c guessed wrong.
 
-The integer arguments are in `a0` to `a3`. Argument five and the subsequent
-arguments are on the stack at `0x10(sp)`, `0x14(sp)`, and so on. The 16 bytes
-from `0x0(sp)` to `0xc(sp)` are the save area for the outgoing arguments. Thus a
-store to `0x10(sp)` immediately before a `jal` is **argument five**. It is not a
-local variable. In the usual conditions, the first two float arguments are in
-`f12` and `f14`.
+Integer arguments go in `a0`–`a3`; the fifth and later arguments go on the stack at `0x10(sp)`, `0x14(sp)`, and so on. The 16 bytes at `0x0(sp)`–`0xc(sp)` are the outgoing argument save area, so a store to `0x10(sp)` immediately before a `jal` is **argument five**, not a local. Floats go in `f12`/`f14` for the first two arguments in the common cases.
 
-The most useful rule is this: **if a call uses an argument register, and the
-function never writes to that register, then that register is a parameter of the
-function.** Example: the target sets `a0` and `a3` and stores one argument on
-the stack, but it does not touch `a1` or `a2`. Then `a1` and `a2` are parameters
-of your function, and the code sends them with no change. mips2c cannot see
-this, and it gives you a function with too few parameters. Add the parameters.
+The decisive trick: **an argument register that is used by a call but never written by the function is a pass-through parameter of the function itself.** If the target sets `a0` and `a3` and stores one stack argument but never touches `a1` or `a2`, then `a1` and `a2` arrived as your function's own parameters and are being forwarded unchanged. mips2c cannot see this and will give you a function with too few parameters. Add them.
 
-Also know these two patterns:
+Also recognise: `sw a0,0x20(sp)` with a frame of `0x20` is homing an incoming argument into the caller's save slot, which IDO does when the parameter is live across a call or its address is taken; and the `move t6,a0` / `lw a3,4(t6)` shuffle is IDO's normal output for a struct pointer parameter that is used both as a base for a load and as an operand.
 
-- `sw a0,0x20(sp)` with a frame size of `0x20` puts an incoming argument into the
-  save slot of the caller. IDO does this when the parameter is live across a
-  call, or when the code uses the address of the parameter.
-- `move t6,a0` with `lw a3,4(t6)` is the usual IDO output for a struct pointer
-  parameter. The code uses that parameter as a base for a load and also as an
-  operand.
+## Naming and settings
 
-## Names and settings
-
-Do not change the name of the function, because `diff_label` must find it. Do
-not change the compiler from `ido5.3`. Do not add or remove flags without
-approval (refer to Part 8).
+Never rename the function; `diff_label` must resolve. Never change the compiler from `ido5.3`. Do not add or remove flags on your own initiative (Part 8).
 
 ---
 
-# PART 7 — EXAMPLE: `jgiaZ` (`sub_GAME_7F073038`)
+# PART 7 — WORKED EXAMPLE: `jgiaZ` (`sub_GAME_7F073038`)
 
-This is the current task and a full run in a small form. It is checked from the
-start to the end. Use it to make sure that your harness operates, before you try
-a scratch with no solution.
+This is the current assignment, and it is a complete run in miniature. It has already been verified end-to-end, so use it to check that your harness works before trying an unsolved scratch.
 
-**Setup data.** Preset 33 (GoldenEye), compiler `ido5.3`, flags `-Olimit 2000
--mips2 -O2`, `max_score` 1300, a context of 417,462 characters, a target of 13
-instructions. The command `./dcm.py family` shows three scratches. One of them
-(`01o4n`, from the user `inspectredc`) has a **score of 0**. This is useful
-data. Get it with `./dcm.py family --get 01o4n`, but only *after* your own
-attempt. Do not get it before.
+**Setup facts.** Preset 33 (GoldenEye), `ido5.3`, `-Olimit 2000 -mips2 -O2`, `max_score` 1300, context 417,462 chars, target 13 instructions. `./dcm.py family` shows three scratches, one of which (`01o4n`, by `inspectredc`) is already at **score 0** — worth knowing, and worth fetching with `./dcm.py family --get 01o4n` *after* you have made your own attempt, never before.
 
-**Build 1 fails.** The error is `cfe: Error: src.c, line 1: Syntax Error` at the
-`?` character at the start. The published source is the output of mips2c. It has
-a placeholder for the return type and arithmetic on `void *`. Do not think about
-the code generation now. Only make the code compile.
+**Build 1 fails.** `cfe: Error: src.c, line 1: Syntax Error` on the leading `?`. The published source is mips2c output with a placeholder return type and `void *` arithmetic. No codegen reasoning yet — just make it compile.
 
-**Read the target.** The command `./dcm.py target` shows a function of 13
-instructions with almost no other calls: a frame of `0x20`, `ra` at `0x1c(sp)`,
-`a0` in `0x20(sp)`, `move t6,a0`, `lw a3,4(t6)`, `li t7,2` with a store to
-`0x10(sp)`, and then `jal likely_generate_DL_for_image_declaration` with `addiu
-a0,a0,0xc` in the delay slot.
+**Read the target.** `./dcm.py target` shows a 13-instruction leaf-ish function: frame `0x20`, `ra` at `0x1c(sp)`, `a0` homed at `0x20(sp)`, `move t6,a0`, `lw a3,4(t6)`, `li t7,2` stored to `0x10(sp)`, then `jal likely_generate_DL_for_image_declaration` with `addiu a0,a0,0xc` in the delay slot.
 
-**The one hypothesis.** The store to `0x10(sp)` shows a call with five
-arguments. But the code never writes to `a1` and `a2`. Thus `a1` and `a2` are
-parameters of `sub_GAME_7F073038`, and that function has three parameters, not
-one. The `lw` instruction at offset 4 reads a word. Thus the field has 32 bits.
+**The one hypothesis.** The store to `0x10(sp)` makes this a five-argument call, but `a1` and `a2` are never written — so they are pass-through parameters of `sub_GAME_7F073038` itself, which therefore takes three arguments, not one. The `lw` at offset 4 is a word, so the field is 32-bit.
 
 ```c
 extern void likely_generate_DL_for_image_declaration(void *, s32, s32, s32, s32);
@@ -651,74 +461,51 @@ void sub_GAME_7F073038(void *arg0, s32 arg1, s32 arg2) {
 }
 ```
 
-The result is `SCORE 0 / max 1300 — *** MATCH ***` at the second build. No loop
-was necessary.
+`SCORE 0 / max 1300 — *** MATCH ***`, second build, no iteration loop needed.
 
-**A negative example, for comparison.** Change the offset to `0x10`, change the
-load to `((u8 *)arg0)[1]`, change the constant to `3`, and add an unnecessary
-local variable `s32 pad[3]`. Then the score is 846/1300, and the histogram is
-typical: `i` for the frame size, `>` for the extra spills that the array caused,
-`|` where `lw` became `lbu`, and `r` where the numbers of the registers moved.
-Each marker is the result of one of the four errors. This is a diff that you can
-read, and this is why you change only one item at a time.
+**Counter-example, for calibration.** Changing the offset to `0x10`, the load to `((u8 *)arg0)[1]`, the constant to `3`, and adding an unnecessary local `s32 pad[3]` gives 846/1300 with a textbook histogram: `i` on the frame size, `>` for the extra spills the array caused, `|` where `lw` became `lbu`, and `r` where the register numbering shifted. Each marker maps to exactly one of the four mistakes. That is what a readable diff looks like, and it is why you change one thing at a time.
 
 ---
 
-# PART 8 — LAST METHODS, IN SEQUENCE
+# PART 8 — LAST RESORTS, IN ORDER
 
-Use this list only after a stop condition occurred and you gave a report to the
-user.
+Work down this list only after the tripwire has fired and you have reported to the user.
 
-**1. Examine the context.** If a struct in `ctx.h` has an incorrect field width,
-or a member is missing, each access through that struct is incorrect. Then the
-diff has many `i` markers, and no change to the C code corrects this. Use grep to
-find the struct. Compare its offsets with the offsets of the loads and the
-stores in the target. Tell the user the specific change before you make it. A
-change to the context is permitted, but it changes data that all the project
-uses. Thus say what you change and why.
+**1. Check the context.** If a struct in `ctx.h` has the wrong field width or a missing member, every access through it is wrong and the diff will be `i`-dominated in a way no C rewrite fixes. Grep the struct, compare the offsets against the target's load/store offsets, and propose the specific edit to the user before making it. Context edits are legitimate but they are a change to shared project truth, so say what you are changing and why.
 
-**2. Think about `-mips3`.** You can change `-mips2` to `-mips3` **only** if you
-can show from the target that a match with `-mips2` is not possible. Example:
-the target has 64-bit instructions (`ld`, `sd`, `dsll`, `daddu`), and `-mips2`
-cannot make them. "I tried many things and nothing was successful" is not
-satisfactory evidence. Give the evidence, get the approval of the user, write it
-in `LOG.md`, and record the change of the flag in `meta.json`.
+**2. Consider `-mips3`.** You may switch `-mips2` to `-mips3` **only** if you can demonstrate from the target that a match is impossible under `-mips2` — for example the target contains 64-bit instructions (`ld`, `sd`, `dsll`, `daddu`) that `-mips2` cannot emit at all. "I tried a lot of things and nothing worked" is not a demonstration. State the evidence, get the user's approval, log it in `LOG.md`, and record the flag change in `meta.json`.
 
-**3. Do not change the compiler.** `ido5.3` does not change. In this project
-there is no condition where a change of the compiler is correct.
+**3. Never change the compiler.** `ido5.3` is fixed. There is no circumstance in this project where changing it is correct.
 
-All the other actions — save the scratch, fork it, or change it on the web site
-— are for the user. They are not for you.
+Anything beyond this — saving, forking, or editing the scratch on the site — belongs to the user, not to you.
 
 ---
 
-# PART 9 — CHECKLIST (ONE PAGE)
+# PART 9 — ONE-PAGE CHECKLIST
 
 ```
-task        a URL or a slug with no other instruction IS the task.
-            SLUG = the last part of the path. Do not fetch the URL. Go to `pull`.
-http        do not send HTTP requests. no curl / curl.exe / wget /
-            Invoke-WebRequest / browser / requests / fetch(). dcm.py is the only client.
-pull        ./dcm.py pull i8JOn                  # a full URL is also permitted
-related     ./dcm.py family                      # a related scratch can have a score of 0
-build       ./dcm.py build                       # failure 1 is usual: mips2c artifacts
-target      ./dcm.py target                      # read the asm BEFORE you write C
-signature   count the arguments: a0-a3 + 0x10(sp) and higher.
-            an argument register with no write = a parameter of your function
-symbols     ./dcm.py ctx '<symbol>'              # do not open ctx.h
-compile     correct the build first. Ignore the score until success:true
+assignment  a URL or bare slug with no other instruction IS the task.
+            SLUG = last path segment. Do not fetch the URL. Go to `pull`.
+http        you never speak HTTP. no curl / curl.exe / wget / Invoke-WebRequest
+            / browser / requests / fetch(). dcm.py is the only client.
+pull        ./dcm.py pull i8JOn                  # accepts the full URL too
+siblings    ./dcm.py family                      # someone may already have 0
+build       ./dcm.py build                       # expect failure #1: mips2c artifacts
+target      ./dcm.py target                      # read the asm BEFORE writing C
+signature   count args: a0-a3 + 0x10(sp)+ ; unwritten arg regs = pass-through params
+symbols     ./dcm.py ctx '<symbol>'              # never open ctx.h
+compile     fix the build first, ignore the score until success:true
 loop        hist -> diff -n 12 -> ONE hypothesis -> build -> log
-worse score ./dcm.py revert   immediately
-stop        8 builds with no improvement / 3 tries in the same category /
-            2 failures that you caused / you will run an HTTP client
-report      status + hist + diff -n 15 + the list of removed hypotheses + one question
-prohibited  each HTTP request that you send, a browser on the scratch,
-            text in Monaco, ctx.h, a change of the compiler
-approval    save, fork, changes of flags, changes of the context, downloads
+regress     ./dcm.py revert   immediately
+halt        8 flat builds / 3 same-category tries / 2 self-inflicted failures
+            / about to run an HTTP client yourself
+report      status + hist + diff -n 15 + ruled-out list + one question
+forbidden   any HTTP call you issue yourself, browser on the scratch,
+            Monaco typing, reading ctx.h, changing compiler
+approval    save, fork, flag changes, context edits, downloads
 ```
 
-If you read this checklist before Part 0, stop and read Part 0. One `curl`
-command on a scratch URL costs 25,000 to 125,000 tokens and the remainder of the
-run.
+If you are reading this checklist before Part 0, stop and read Part 0. One
+`curl` of a scratch URL costs you 25k–125k tokens and the rest of the run.
 
 ---

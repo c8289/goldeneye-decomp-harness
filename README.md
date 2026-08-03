@@ -2,8 +2,8 @@
 
 Matching decompilation is the practice of writing C source that, when fed to a
 specific period compiler, produces *byte-identical* machine code to a shipped
-binary. It is how projects reconstruct the original source of games like
-GoldenEye 007 and Perfect Dark. Success is not "the code works" — it is an exact
+binary. It is how projects reconstruct the original source of a game like
+GoldenEye 007. Success is not "the code works" — it is an exact
 instruction-level match, scored automatically. Lower is better; 0 is a match.
 
 decomp.me is a public web service that hosts these problems ("scratches") and
@@ -26,7 +26,7 @@ scratch URL.
 
 ---
 
-# decomp.me matching — operating manual (GoldenEye / Perfect Dark N64)
+# decomp.me matching — operating manual (GoldenEye N64)
 
 **Audience: an autonomous coding agent with shell access. Read Part 0 and Part 1 before doing anything else.**
 
@@ -35,7 +35,7 @@ Assignment: `SLUG=<slug>`, from `https://decomp.me/scratch/<slug>`.
 This document uses `jgiaZ` throughout as a running example, including the fully
 worked solve in Part 7. **Substitute the slug you were actually given.** Nothing
 here is specific to `jgiaZ` except the worked example itself; the protocol
-generalizes to any GoldenEye / Perfect Dark scratch.
+generalizes to any GoldenEye scratch.
 
 ---
 

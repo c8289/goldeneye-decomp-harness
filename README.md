@@ -12,8 +12,7 @@ Then read Part 0 and Part 1.
 **Never issue an HTTP request to decomp.me yourself.** Not curl, not curl.exe,
 not wget, not Invoke-WebRequest, not a browser tool, not `requests`, not a
 fetch() in a script you wrote. Not the site, not `/api`. Not "just to see what
-this is." `--silent` and `--fail` do not make it safe; they control error
-output, not response size.
+this is."
 
 Reason: `GET /scratch/<slug>` returns the scratch's `context` field inline —
 both the HTML page (embedded in the RSC payload) and the JSON API. On a
@@ -21,6 +20,22 @@ GoldenEye scratch that field is 100,000–500,000 characters, 25k–125k tokens,
 arriving as one tool result. It will eat most or all of your context window and
 you will not recover. This is the single most common failure on this repo,
 ahead of every codegen mistake.
+
+There is no flag that makes it safe. `--max-time` bounds wall-clock, not bytes.
+`--fail` and `-sS` bound error output, not the body. `-L` just makes sure you
+arrive at the payload. An agent adding careful-looking flags to this command is
+bounding the wrong axis: the request takes under two seconds and succeeds
+cleanly, and that is precisely the problem. **The response is the damage.**
+
+The hazard is bytes reaching your transcript, not the word `curl`. So if you
+ever have a real reason to touch decomp.me outside the harness — you almost
+certainly do not — the body goes to a file and never to stdout:
+
+    curl -sS -o raw.json https://www.decomp.me/api/scratch/$SLUG
+    wc -c raw.json          # check the size before you look at the contents
+
+then read it with a bounded tool. Apply that same rule to wget,
+Invoke-WebRequest, `requests.get`, and anything else you improvise.
 
 `dcm.py` is the only HTTP client in this project. It writes that field straight
 to `ctx.h` on disk and never lets it reach the transcript, and every command it

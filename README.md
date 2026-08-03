@@ -208,7 +208,7 @@ Base: `https://decomp.me/api`. No auth for anything below. `www.decomp.me` also 
 | GET | `/scratch/{slug}/family` | related scratches (forks, siblings) with scores |
 | GET | `/scratch/{slug}/export` | zip |
 | GET | `/scratch?page_size=N` | paginated `{next, previous, results}` |
-| GET | `/preset/{id}` | compiler + flags a preset implies (GE/PD is **33**) |
+| GET | `/preset/{id}` | compiler + flags a preset implies (GE is **33**) |
 | GET | `/user` | current identity |
 | OPTIONS | any | DRF field schema |
 | PUT | `/scratch/{slug}` | save — **owner only, requires explicit user approval** |
@@ -321,7 +321,7 @@ Late-function divergence is usually downstream of a single earlier cause. Chasin
 
 ## Hypothesis catalogue, roughly in order of yield
 
-**Argument count and register class of the callee.** On GE/PD this is the highest-yield check by far, because mips2c guesses call signatures and is frequently wrong. See Part 6.
+**Argument count and register class of the callee.** On GE this is the highest-yield check by far, because mips2c guesses call signatures and is frequently wrong. See Part 6.
 
 **Types and signedness.** `s32` vs `u32` vs `s16` vs `u8` changes sign/zero extension and can add or remove whole instructions. On MIPS, `lb`/`lbu`/`lh`/`lhu` mismatches are pure type errors. High yield, low risk.
 
@@ -353,7 +353,7 @@ These scratches share a signature shape, and knowing it saves most of the iterat
 
 ## The published source usually does not compile
 
-GE/PD scratches are bulk-imported mips2c output. A published `score == max_score` (as on `jgiaZ`: 1300/1300) means the source has never compiled. Expect artifacts like a bare `?` where a return type belongs, `sp` pseudo-locals, `temp_t6` chains, and arithmetic on `void *` — which is a GCC extension that **IDO rejects**. Cast to `u8 *` before adding a byte offset. Your first job is a clean build, not a good score.
+GE scratches are bulk-imported mips2c output. A published `score == max_score` (as on `jgiaZ`: 1300/1300) means the source has never compiled. Expect artifacts like a bare `?` where a return type belongs, `sp` pseudo-locals, `temp_t6` chains, and arithmetic on `void *` — which is a GCC extension that **IDO rejects**. Cast to `u8 *` before adding a byte offset. Your first job is a clean build, not a good score.
 
 ## The context is a whole-game header dump
 
@@ -386,7 +386,7 @@ Never rename the function; `diff_label` must resolve. Never change the compiler 
 
 This is the current assignment, and it is a complete run in miniature. It has already been verified end-to-end, so use it to check that your harness works before trying an unsolved scratch.
 
-**Setup facts.** Preset 33 (GoldenEye / Perfect Dark), `ido5.3`, `-Olimit 2000 -mips2 -O2`, `max_score` 1300, context 417,462 chars, target 13 instructions. `./dcm.py family` shows three scratches, one of which (`01o4n`, by `inspectredc`) is already at **score 0** — worth knowing, and worth fetching with `./dcm.py family --get 01o4n` *after* you have made your own attempt, never before.
+**Setup facts.** Preset 33 (GoldenEye), `ido5.3`, `-Olimit 2000 -mips2 -O2`, `max_score` 1300, context 417,462 chars, target 13 instructions. `./dcm.py family` shows three scratches, one of which (`01o4n`, by `inspectredc`) is already at **score 0** — worth knowing, and worth fetching with `./dcm.py family --get 01o4n` *after* you have made your own attempt, never before.
 
 **Build 1 fails.** `cfe: Error: src.c, line 1: Syntax Error` on the leading `?`. The published source is mips2c output with a placeholder return type and `void *` arithmetic. No codegen reasoning yet — just make it compile.
 

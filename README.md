@@ -1,4 +1,4 @@
-# decomp.me matching harness — GoldenEye N64
+# decomp.me harness — GoldenEye N64
 
 ## Launching an agent at this repo
 

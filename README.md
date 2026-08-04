@@ -1,19 +1,16 @@
 # dcm — a bounded harness for agentic decompilation
 
 A single-file CLI and operating protocol that lets an autonomous coding agent work
-[decomp.me](https://decomp.me) scratches for Nintendo 64 without destroying its own
-context window.
+[decomp.me](https://decomp.me) scratches for Nintendo 64.
 
 [![selftest](https://github.com/c8289/goldeneye-decomp-harness/actions/workflows/selftest.yml/badge.svg)](https://github.com/c8289/goldeneye-decomp-harness/actions/workflows/selftest.yml)
 
 Python 3.6+ · standard library only · no API key · MIT
 
-**If you are a human reading this cold:** the interesting part is not the decompilation. It is the
-control problem underneath it. An LLM agent doing this work fails in two specific ways — it fetches
-one oversized API response and loses its context window, or it grinds out plausible-sounding ideas
-for forty turns without noticing that its score has not moved. Both failures are invisible from
-inside the transcript. So this harness moves the limits out of the prompt and into code that
-refuses: bounded output on every command, one declared hypothesis per compile, and halt conditions
+**Introduction:** An LLM agent doing this work can fail in two ways — it fetches
+one oversized API response and fills up its context window, or it generates plausible-sounding ideas
+for forty turns without noticing that its score has not moved. This harness doe the following: bounded output 
+on every command, one declared hypothesis per compile, and halt conditions
 counted on disk rather than by the agent itself. Skip to [The problem](#the-problem) for the long
 version, or [The guardrails](#the-guardrails) for the enforcement table.
 
@@ -28,25 +25,13 @@ version, or [The guardrails](#the-guardrails) for the enforcement table.
 
 ## The problem
 
-Matching decompilation is the practice of writing C source that, when fed to a specific period
-compiler, produces *byte-identical* machine code to a shipped binary. It is how projects
-reconstruct the original source of a game like GoldenEye 007. Success is not "the code works" — it
-is an exact instruction-level match, scored automatically. Lower is better; 0 is a match.
+Matching decompilation is the practice of writing C source that, when fed to a specific
+compiler, produces *byte-identical* machine code when compared to the original binary. It is how projects
+reconstruct the original source code of a game like GoldenEye 007. Success is an exact instruction-level match, 
+scored automatically. Lower is better; 0 is a match.
 
 decomp.me hosts these problems as "scratches" and compiles submissions against the target. It
-exposes a public JSON API with no auth. So the mechanics are easy. Two things make the task
-genuinely hostile to an LLM agent:
-
-**One careless request ends the run.** `GET /scratch/<slug>` returns the scratch's whole-game header
-dump inline. On GoldenEye 007 that field is commonly past 400,000 characters — 25k–125k tokens arriving
-as one tool result. No `curl` flag prevents this: `--max-time` bounds wall-clock, `--fail` bounds
-error output, `-L` just makes sure you arrive at the payload. The request succeeds in under two
-seconds, and that is precisely the problem. The response *is* the damage.
-
-**The loop is long and the failure mode is silent.** A scratch takes dozens of compile cycles.
-Agents that fail this task do not fail for lack of ideas. They fail by generating ideas
-indefinitely without noticing that none of them worked, until the context is exhausted and the
-score is exactly where it was forty turns ago.
+exposes a public JSON API with no auth.
 
 ## What this does about it
 

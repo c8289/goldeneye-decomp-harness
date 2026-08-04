@@ -1,6 +1,6 @@
 # dcm — a bounded harness for agentic decompilation
 
-**Model requirements:** Tested with [Claude Opus 5 and ChatGPT5.6 Luna.]; other models may produce materially worse output.
+**Model requirements:** Tested with [Claude Opus 5 and ChatGPT5.6 Luna.]; other models may produce worse output.
 
 A single-file CLI and operating protocol that lets an autonomous coding agent work
 [decomp.me](https://decomp.me) scratches for Nintendo 64.

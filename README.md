@@ -2,7 +2,7 @@
 
 **Model requirements:** Tested with [Claude Opus 5 and GPT-5.6 Luna.]; other models may produce worse output.
 
-A single-file CLI and operating protocol that lets an autonomous coding agent work
+A CLI and operating protocol that lets an autonomous coding agent work
 [decomp.me](https://decomp.me) scratches for Nintendo 64.
 
 [![selftest](https://github.com/c8289/goldeneye-decomp-harness/actions/workflows/selftest.yml/badge.svg)](https://github.com/c8289/goldeneye-decomp-harness/actions/workflows/selftest.yml)

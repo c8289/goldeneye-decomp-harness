@@ -176,9 +176,9 @@ is generated and gitignored:
 
 ## Design notes
 
-**The tripwire moved from the prompt into the code.** Version 2 described the halt conditions in the
+**The tripwire moved from the prompt into the code.** A previous version of this repo described the halt conditions in the
 manual and asked the agent to honour them. It did not work reliably — self-monitoring is exactly
-the capability that degrades as a transcript grows. Version 3 counts streaks in `meta.json` and
+the capability that degrades as a transcript grows. This repo now counts streaks in `meta.json` and
 refuses to compile, which turns a soft instruction into an invariant.
 
 **Hypotheses are declared before the compile, not narrated after it.** `trial --expect` forces a

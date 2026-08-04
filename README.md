@@ -115,8 +115,8 @@ https://decomp.me/scratch/<SLUG> — do not fetch that URL yourself,
 `./dcm.py pull` retrieves it.
 ```
 
-The prohibition has to be in your message, not only in a file. An agent always reads your turn;
-whether it reads a document before its first tool call is not something a repository can control.
+The `Read AGENT.md before doing anything` prohibition has to be in your message, not only in a file. An agent always reads your turn;
+whether it reads this file before its first tool call is not something this repository can control.
 If a browser MCP server is configured, disable it for this task.
 
 ## Commands

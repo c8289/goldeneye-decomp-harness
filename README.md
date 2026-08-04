@@ -1,7 +1,7 @@
 # dcm — a bounded harness for agentic decompilation
 
 A single-file CLI and operating protocol that lets an autonomous coding agent work
-[decomp.me](https://decomp.me) scratches for **GoldenEye 007 (N64)** without destroying its own
+[decomp.me](https://decomp.me) scratches for Nintendo 64 without destroying its own
 context window.
 
 [![selftest](https://github.com/c8289/goldeneye-decomp-harness/actions/workflows/selftest.yml/badge.svg)](https://github.com/c8289/goldeneye-decomp-harness/actions/workflows/selftest.yml)
@@ -38,7 +38,7 @@ exposes a public JSON API with no auth. So the mechanics are easy. Two things ma
 genuinely hostile to an LLM agent:
 
 **One careless request ends the run.** `GET /scratch/<slug>` returns the scratch's whole-game header
-dump inline. On GoldenEye that field is commonly past 400,000 characters — 25k–125k tokens arriving
+dump inline. On GoldenEye 007 that field is commonly past 400,000 characters — 25k–125k tokens arriving
 as one tool result. No `curl` flag prevents this: `--max-time` bounds wall-clock, `--fail` bounds
 error output, `-L` just makes sure you arrive at the payload. The request succeeds in under two
 seconds, and that is precisely the problem. The response *is* the damage.

@@ -24,7 +24,7 @@ compiler, produces *byte-identical* machine code when compared to the original b
 reconstruct the original source code of a game like GoldenEye 007. Success is an exact instruction-level match, 
 scored automatically. Lower is better; 0 is a match.
 
-decomp.me hosts these problems as "scratches" and compiles submissions against the target. It
+Decomp.me hosts these problems as "scratches" and compiles submissions against the target. It
 exposes a public JSON API with no auth.
 
 ## What this does about it

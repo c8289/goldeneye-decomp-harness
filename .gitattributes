@@ -1,0 +1,5 @@
+# dcm.py is executed as ./dcm.py. A CRLF checkout makes the kernel look for an
+# interpreter literally named "python3\r", so line endings are not cosmetic here.
+* text=auto eol=lf
+*.py text eol=lf
+*.md text eol=lf

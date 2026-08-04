@@ -1,0 +1,57 @@
+name: selftest
+
+# The harness is standard library only and its tests are offline, so CI is
+# checkout -> setup-python -> run. No install step, no network, no secrets.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 is the oldest interpreter the current hosted images provide.
+        # dcm.py itself uses no syntax or API newer than 3.6.
+        python-version: ["3.9", "3.11", "3.13"]
+    name: python ${{ matrix.python-version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: selftest
+        run: python dcm.py selftest
+
+      - name: executable bit and shebang
+        run: |
+          test -x dcm.py || { echo "dcm.py is not executable; the docs all say ./dcm.py"; exit 1; }
+          ./dcm.py selftest > /dev/null
+
+      - name: no third-party imports
+        # sys.stdlib_module_names is 3.10+, so this check runs once, on the newest.
+        if: matrix.python-version == '3.13'
+        run: |
+          python - <<'EOF'
+          import ast, sys
+          tree = ast.parse(open("dcm.py").read())
+          names = set()
+          for node in ast.walk(tree):
+              if isinstance(node, ast.Import):
+                  names.update(a.name.split(".")[0] for a in node.names)
+              elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                  names.add(node.module.split(".")[0])
+          extra = sorted(n for n in names if n not in sys.stdlib_module_names)
+          if extra:
+              sys.exit("non-stdlib imports found: %s" % extra)
+          print("stdlib only:", sorted(names))
+          EOF

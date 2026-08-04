@@ -1,4 +1,4 @@
-# dcm — a bounded harness for agentic matching decompilation
+# dcm — a bounded harness for agentic decompilation
 
 A single-file CLI and operating protocol that lets an autonomous coding agent work
 [decomp.me](https://decomp.me) scratches for **GoldenEye 007 (N64)** without destroying its own

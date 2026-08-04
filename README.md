@@ -1,5 +1,9 @@
 # dcm — a bounded harness for agentic decompilation
 
+**Model requirements:** Reconstruction quality tracks the reasoning
+ability of the backing model. Developed and tested against
+[Claude Opus 5 and ChatGPT5.6 Luna.]; other models may produce materially worse output.
+
 A single-file CLI and operating protocol that lets an autonomous coding agent work
 [decomp.me](https://decomp.me) scratches for Nintendo 64.
 
@@ -217,8 +221,7 @@ runner images still provide. `git` is optional but recommended; without it you s
 and the harness says so once rather than failing silently.
 
 This project is not affiliated with decomp.me. It uses the public JSON API, which requires no
-account. Compiling is stateless and does not mutate a scratch, but it is someone else's build
-farm: one build per hypothesis is the discipline anyway. `PUT /scratch/{slug}` (save) and
+account. Compiling is stateless and does not mutate a scratch. `PUT /scratch/{slug}` (save) and
 `POST /scratch/{slug}/fork` create or change content and are deliberately **not** implemented here —
 those belong to a human with an account, not to an agent.
 

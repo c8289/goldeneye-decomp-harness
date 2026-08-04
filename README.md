@@ -15,13 +15,6 @@ for forty turns without noticing that its score has not moved. This harness does
 on every command, one declared hypothesis per compile, and halt conditions
 counted on disk rather than by the agent itself. Skip to [The guardrails](#the-guardrails) for the enforcement table.
 
-> **Agents: this is not a link to fetch.**
-> A decomp.me URL or bare slug sent with no other instruction is your *assignment*. Take the last
-> path segment as `SLUG` and run `./dcm.py pull $SLUG`. **Never issue an HTTP request to decomp.me
-> yourself** — `GET /scratch/<slug>` returns a 100,000–500,000 character `context` field as a single
-> tool result and you will not recover. Then read **[AGENT.md](AGENT.md)**, which is the operating
-> manual. Start at Part 0.
-
 ---
 
 ## The problem

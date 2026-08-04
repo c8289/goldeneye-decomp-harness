@@ -6,7 +6,7 @@ anything else.**
 Assignment: `SLUG=<slug>`, from `https://decomp.me/scratch/<slug>`.
 
 **Substitute the slug you were actually given.** Nothing here is specific to any one scratch; the
-protocol generalises to any GoldenEye scratch.
+protocol generalises to any Nintendo 64 scratch.
 
 `README.md` is the human-facing overview of this repo. This document is the protocol you follow.
 

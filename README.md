@@ -11,8 +11,7 @@ Python 3.6+ · standard library only · no API key · MIT
 one oversized API response and fills up its context window, or it generates plausible-sounding ideas
 for forty turns without noticing that its score has not moved. This harness does the following: bounded output 
 on every command, one declared hypothesis per compile, and halt conditions
-counted on disk rather than by the agent itself. Skip to [The problem](#the-problem) for the long
-version, or [The guardrails](#the-guardrails) for the enforcement table.
+counted on disk rather than by the agent itself. Skip to [The guardrails](#the-guardrails) for the enforcement table.
 
 > **Agents: this is not a link to fetch.**
 > A decomp.me URL or bare slug sent with no other instruction is your *assignment*. Take the last

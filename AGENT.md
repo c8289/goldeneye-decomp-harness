@@ -1,4 +1,4 @@
-# decomp.me matching — operating manual (GoldenEye N64)
+# decomp.me N64 decompilation — operating manual
 
 **Audience: an autonomous coding agent with shell access. Read Part 0 and Part 1 before doing
 anything else.**
@@ -16,7 +16,7 @@ protocol generalises to any Nintendo 64 scratch.
 
 **decomp.me is an HTTP compile service. It is not a web app you operate.**
 
-Every part of the match loop is available over a public JSON API that needs no login, no cookie and
+Every part of the decompilation loop is available over a public JSON API that needs no login, no cookie and
 no CSRF token. The entire workflow is `./dcm.py` plus local files. **You never speak HTTP
 yourself.**
 
@@ -77,16 +77,17 @@ writes. None of the mutating endpoints are implemented in `dcm.py`, and that is 
 
 ## Non-negotiables
 
-- The context field on a GE scratch is 100k–500k characters — **commonly past 400,000 characters
+- The context field on an N64 scratch is 100k–500k characters — **commonly past 400,000 characters
   and 100k tokens.** The harness writes it to `ctx.h`. **Never read it, never `cat` it, never let
   it into a tool result.** Use `./dcm.py ctx <regex>` — that is what it is for.
 - One hypothesis per compile. This is enforced: `build` refuses to run without an armed `trial`.
 - Never build a change on top of an unvalidated change.
-- Score: **lower is better, 0 is a match.** It is not capped by `max_score`.
+- Score: **lower is better, 0 means no remaining differences.** It is not capped by `max_score`.
 - `current_score == max_score` almost always means **your code did not compile**, not that it
   compiled badly.
-- The compiler is `ido5.3`. **You may never change it.** Flags are `-Olimit 2000 -mips2 -O2`; see
-  Part 7 before touching them.
+- The compiler and compiler flags are part of the scratch's target configuration. **You may never
+  change the compiler.** Preserve the flags pulled into `meta.json`; see Part 7 before proposing
+  an architecture-flag change.
 
 ---
 
@@ -101,7 +102,7 @@ cp dcm.py work/$SLUG              # one copy per working directory
 cd work/$SLUG
 chmod +x dcm.py
 ./dcm.py pull $SLUG
-./dcm.py family                   # is a sibling already matched?
+./dcm.py family                   # has a sibling already made progress?
 ./dcm.py build                    # first build; usually fails, that is expected
 ./dcm.py target                   # READ THE TARGET before writing any C
 ```
@@ -306,7 +307,7 @@ you can reimplement it.
 | GET | `/scratch/{slug}/family` | related scratches (forks, siblings) with scores |
 | GET | `/scratch/{slug}/export` | zip of the same 400 KB payload. Harness only |
 | GET | `/scratch?page_size=N` | paginated `{next, previous, results}` |
-| GET | `/preset/{id}` | compiler + flags a preset implies (GE is **33**) |
+ | GET | `/preset/{id}` | compiler + flags implied by a project-specific preset |
 | GET | `/user` | current identity |
 | OPTIONS | any | DRF field schema |
 | PUT | `/scratch/{slug}` | save — **owner only, not implemented, human's call** |
@@ -316,8 +317,8 @@ you can reimplement it.
 
 ```json
 {
-  "compiler": "ido5.3",
-  "compiler_flags": "-Olimit 2000 -mips2 -O2",
+  "compiler": "<the compiler pulled for this scratch>",
+  "compiler_flags": "<the flags pulled for this scratch>",
   "source_code": "...",
   "context": "...",
   "diff_label": "<target function name>",
@@ -452,8 +453,8 @@ ideas — but only one at a time, and only three per category.
 `./dcm.py categories` prints these with remaining budget. Pick the one that actually describes your
 edit; the budget is what stops you from trying five variations of the same idea.
 
-**`signature` — argument count and register class of the callee.** On GE this is the highest-yield
-check by far, because mips2c guesses call signatures and is frequently wrong. See Part 6.
+**`signature` — argument count and register class of the callee.** On N64 scratches this is often
+the highest-yield check, because mips2c guesses call signatures and is frequently wrong. See Part 6.
 
 **`types` — types and signedness.** `s32` vs `u32` vs `s16` vs `u8` changes sign/zero extension and
 can add or remove whole instructions. On MIPS, `lb`/`lbu`/`lh`/`lhu` mismatches are pure type
@@ -501,19 +502,19 @@ limit bounds it instead.
 
 ---
 
-# PART 6 — GOLDENEYE / PERFECT DARK SPECIFICS
+# PART 6 — N64-SPECIFIC NOTES
 
-These scratches share a signature shape, and knowing it saves most of the iterations.
+Many N64 scratches share these characteristics, and knowing them can save iterations.
 
 ## The published source usually does not compile
 
-GE scratches are bulk-imported mips2c output. A published `score == max_score` means the source has
-never compiled. Expect artifacts like a bare `?` where a return type belongs, `sp` pseudo-locals,
+Some N64 scratches are bulk-imported mips2c output. A published `score == max_score` means the source
+has never compiled. Expect artifacts like a bare `?` where a return type belongs, `sp` pseudo-locals,
 `temp_t6` chains, and arithmetic on `void *` — which is a GCC extension that **IDO rejects**. Cast
 to `u8 *` before adding a byte offset. Your first job is a clean build, not a good score; use the
 `build` category for those trials.
 
-## The context is a whole-game header dump
+## The context can be a large header dump
 
 Commonly past 400,000 characters, mostly typedefs, struct definitions and prototypes for other
 functions. It is already correct for everything it contains. Two consequences: never rewrite it
@@ -529,8 +530,8 @@ prototype at the top of `src.c`** — that is expected and normal, not a context
 
 ## Read the o32 calling convention off the target
 
-This is the single most useful skill for GE/PD, because it recovers the true signature that mips2c
-guessed wrong.
+This is one of the most useful skills for N64 decompilation, because it recovers the true signature
+that mips2c guessed wrong.
 
 Integer arguments go in `a0`–`a3`; the fifth and later arguments go on the stack at `0x10(sp)`,
 `0x14(sp)`, and so on. The 16 bytes at `0x0(sp)`–`0xc(sp)` are the outgoing argument save area, so
@@ -550,8 +551,7 @@ parameter that is used both as a base for a load and as an operand.
 
 ## Naming and settings
 
-Never rename the function; `diff_label` must resolve. Never change the compiler from `ido5.3`. Do
-not add or remove flags on your own initiative (Part 7).
+Never rename the function; `diff_label` must resolve. Never change the compiler from what it is already set to. Do not add or remove flags on your own initiative (Part 7).
 
 ---
 
@@ -565,14 +565,19 @@ Grep the struct, compare the offsets against the target's load/store offsets, an
 specific edit to the human before making it. Context edits are legitimate but they are a change to
 shared project truth, so say what you are changing and why.
 
-**2. Consider `-mips3`.** You may switch `-mips2` to `-mips3` **only** if you can demonstrate from
-the target that a match is impossible under `-mips2` — for example the target contains 64-bit
-instructions (`ld`, `sd`, `dsll`, `daddu`) that `-mips2` cannot emit at all. "I tried a lot of
-things and nothing worked" is not a demonstration. State the evidence, get the human's approval,
-log it in `LOG.md`, and record the flag change in `meta.json`.
+**2. Consider an architecture-flag change.** Treat the flags pulled into `meta.json` as part of
+the target configuration, not as tuning knobs. If the scratch uses `-mips2`, you may propose
+switching to `-mips3` **only** if you can demonstrate from the target that a match is impossible
+under `-mips2` — for example, the target contains 64-bit instructions (`ld`, `sd`, `dsll`,
+`daddu`) that `-mips2` cannot emit at all. For a scratch whose original flags use another MIPS
+architecture level, apply the same rule: change it only when the target shows that the current
+level cannot generate a match, identify the replacement level required by that evidence, and do
+not assume that `-mips3` is the correct replacement. "I tried a lot of things and nothing
+worked" is not a demonstration. State the evidence, get the human's approval, log it in `LOG.md`,
+and record the flag change in `meta.json`.
 
-**3. Never change the compiler.** `ido5.3` is fixed. There is no circumstance in this project where
-changing it is correct.
+**3. Never change the compiler.** Preserve the compiler pulled into `meta.json`; changing it is not
+a valid way to solve a mismatch.
 
 Anything beyond this — saving, forking, or editing the scratch on the site — belongs to the human,
 not to you. Those endpoints are not in `dcm.py` and you must not write your own client for them.

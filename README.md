@@ -1,28 +1,26 @@
 # dcm — a bounded harness for agentic decompilation
 
-**Model requirements:** Tested with [Claude Opus 5 and GPT-5.6 Luna.]; other models may produce worse output.
+**Model requirements:** Tested with [GPT-5.6 Luna]; other models may produce worse output.
 
-A CLI and operating protocol that lets an autonomous coding agent work
+A CLI and operating protocol that lets an autonomous coding agent work on
 [decomp.me](https://decomp.me) scratches for Nintendo 64.
 
-[![selftest](https://github.com/c8289/goldeneye-decomp-harness/actions/workflows/selftest.yml/badge.svg)](https://github.com/c8289/goldeneye-decomp-harness/actions/workflows/selftest.yml)
+[![selftest](https://github.com/c8289/n64-decomp-harness/actions/workflows/selftest.yml/badge.svg)](https://github.com/c8289/n64-decomp-harness/actions/workflows/selftest.yml)
 
 Python 3.6+ · standard library only · no API key · MIT
 
 **Introduction:** An LLM agent doing this work can fail in two ways — it fetches
 one oversized API response and fills up its context window, or it generates plausible-sounding ideas
-for forty turns without noticing that its score has not moved. This harness does the following: bounded output 
-on every command, one declared hypothesis per compile, and halt conditions
+for many turns without noticing that its score has not moved. This harness does the following: bounded output on every command, one declared hypothesis per compile, and halt conditions
 counted on disk rather than by the agent itself. Skip to [The guardrails](#the-guardrails) for the enforcement table.
 
 ---
 
 ## The problem
-
-Matching decompilation is the practice of writing C source that, when fed to a specific
-compiler, produces *byte-identical* machine code when compared to the original binary. It is how projects
-reconstruct the original source code of a game like GoldenEye 007. Success is an exact instruction-level match, 
-scored automatically. Lower is better; 0 is a match.
+N64 decompilation involves writing C source that, when fed to a specific
+compiler, produces *byte-identical* machine code when compared to the original binary. This harness
+helps projects reconstruct the original source code of an N64 game. Success is measured at the
+instruction level by an automated score. Lower is better; 0 means there are no remaining differences.
 
 Decomp.me hosts these problems as "scratches" and compiles submissions against the target. It
 exposes a public JSON API with no auth.
@@ -76,14 +74,14 @@ Roughly 25 lines per iteration. That is the agent's entire feedback channel.
 ## Quickstart
 
 ```bash
-git clone https://github.com/c8289/goldeneye-decomp-harness.git
-cd goldeneye-decomp-harness
+git clone https://github.com/c8289/n64-decomp-harness.git
+cd n64-decomp-harness
 ./dcm.py selftest                 # 51 offline checks, no network
 
 SLUG=i8JOn                        # from https://decomp.me/scratch/i8JOn
 mkdir -p work/$SLUG && cp dcm.py work/$SLUG && cd work/$SLUG
 ./dcm.py pull $SLUG               # -> meta.json, src.c, ctx.h, best.c, LOG.md, git baseline
-./dcm.py family                   # has a sibling already matched this?
+./dcm.py family                   # has a sibling already made progress on this?
 ./dcm.py build                    # first build; usually fails on mips2c artifacts
 ./dcm.py target                   # read the target disassembly before writing any C
 ```
@@ -103,13 +101,12 @@ Then the loop, one hypothesis at a time:
 Give it a scratch URL — but **do not paste a bare URL**. Paste this:
 
 ```
-Read AGENT.md before doing anything, then solve
+Read AGENT.md before doing anything, then work on
 https://decomp.me/scratch/<SLUG> — do not fetch that URL yourself,
 `./dcm.py pull` retrieves it.
 ```
 
-The `Read AGENT.md before doing anything` prohibition has to be in your message, not only in a file. An agent always reads your turn;
-whether it reads this file before its first tool call is not something this repository can control.
+The `Read AGENT.md before doing anything` prohibition has to be in your message, not only in a file. An agent always reads your turn; whether it reads this file before its first tool call is not something this repository can control.
 If a browser MCP server is configured, disable it for this task.
 
 ## Commands
@@ -152,9 +149,6 @@ agent cannot launder a streak by resuming.
 
 ## Files
 
-`dcm.py` and the two markdown files are the whole project. Everything a working directory contains
-is generated and gitignored:
-
 | File | What it is |
 |---|---|
 | `meta.json` | Scratch settings, best score, iteration, history, guardrail state, trial ledger |
@@ -170,11 +164,6 @@ is generated and gitignored:
 | `LOG.md` | The experiment ledger: hypothesis, expectation, result, verdict |
 
 ## Design notes
-
-**The tripwire moved from the prompt into the code.** A previous version of this repo described the halt conditions in the
-manual and asked the agent to honour them. It did not work reliably — self-monitoring is exactly
-the capability that degrades as a transcript grows. This repo now counts streaks in `meta.json` and
-refuses to compile, which turns a soft instruction into an invariant.
 
 **Hypotheses are declared before the compile, not narrated after it.** `trial --expect` forces a
 falsifiable prediction on the record before the evidence arrives, and the category budget makes
